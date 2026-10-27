@@ -1,14 +1,15 @@
 /* ==========================================================================
-   감지기 생산현황 관리 시스템 - 스타일시트 (16:9 Full-Width 반응형 최적화)
+   감지기 생산현황 관리 시스템 - 스타일시트
+   (스마트 팩토리 테마, 기본형/와이드 뷰 모드 지원, 스프레드시트 키보드 내비게이션)
    ========================================================================== */
 
 :root {
-  /* 색상 팔레트: 밝고 깔끔한 인더스트리얼/스마트 팩토리 테마 */
+  /* 색상 팔레트 */
   --bg-app: #f4f6f9;
   --bg-card: #ffffff;
   --bg-subtle: #f8fafc;
   --border-light: #e2e8f0;
-  --border-focus: #3b82f6;
+  --border-focus: #2563eb;
 
   /* 텍스트 색상 */
   --text-main: #0f172a;
@@ -26,12 +27,15 @@
   --success-hover: #059669;
   --success-light: #ecfdf5;
 
-  --danger: #ef4444;
+  /* 잔량 및 경고용 적색 테마 */
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
   --danger-light: #fef2f2;
   --danger-border: #fecaca;
 
-  --warning: #f59e0b;
-  --warning-light: #fffbeb;
+  --purple: #7c3aed;
+  --purple-light: #f5f3ff;
+  --purple-border: #ddd6fe;
 
   /* 요일 구분 컬러 */
   --sat-bg: #eff6ff;
@@ -39,7 +43,7 @@
   --sat-border: #bfdbfe;
 
   --sun-bg: #fef2f2;
-  --sun-text: #b91c1c;
+  --sun-text: #dc2626;
   --sun-border: #fecaca;
 
   /* 그리드/테이블 */
@@ -49,17 +53,15 @@
   --td-hover: #f8fafc;
   --readonly-bg: #f8fafc;
 
-  /* 섀도우 및 라운드 */
+  /* 라운드 & 섀도우 */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
   --radius-xl: 14px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
 }
 
-/* 기본 리셋 및 전역 설정 */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -67,14 +69,13 @@
 }
 
 body {
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: var(--bg-app);
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  background-color: #e5e7eb;
   color: var(--text-main);
   line-height: 1.45;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  overflow: hidden;
   height: 100vh;
 }
 
@@ -83,14 +84,58 @@ body {
   font-family: 'JetBrains Mono', 'Pretendard', monospace;
 }
 
-/* 앱 최상위 컨테이너 (16:9 와이드 풀 스크린 배치) */
+/* ==========================================================================
+   뷰 모드 제어 (기본형 Centered vs 와이드형 Full-Width)
+   ========================================================================== */
 .app-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  width: 100vw;
-  max-width: 100%;
+  background-color: var(--bg-app);
   overflow: hidden;
+  transition: max-width 0.25s ease, margin 0.25s ease;
+}
+
+/* 기본 뷰: 중앙 집중형 레이아웃 */
+body.view-mode-default .app-container {
+  max-width: 1480px;
+  margin: 0 auto;
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.1);
+  border-left: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+}
+
+/* 와이드 뷰: 16:9 전체 화면 활용 */
+body.view-mode-wide .app-container {
+  max-width: 100%;
+  margin: 0;
+}
+
+/* 뷰 모드 스위치 버튼 */
+.view-mode-selector {
+  display: flex;
+  background-color: var(--bg-app);
+  padding: 2px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+}
+
+.btn-view-toggle {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-view-toggle.active {
+  background-color: #ffffff;
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ==========================================================================
@@ -101,7 +146,7 @@ body {
   align-items: center;
   justify-content: space-between;
   height: 52px;
-  padding: 0 20px;
+  padding: 0 16px;
   background-color: #ffffff;
   border-bottom: 1px solid var(--border-light);
   box-shadow: var(--shadow-sm);
@@ -112,7 +157,7 @@ body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .logo-badge {
@@ -128,7 +173,7 @@ body {
 }
 
 .logo-title {
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--text-main);
   letter-spacing: -0.3px;
@@ -142,7 +187,6 @@ body {
   background: var(--primary-light);
   color: var(--primary);
   border-radius: var(--radius-sm);
-  letter-spacing: 0.5px;
 }
 
 /* 탭 네비게이션 */
@@ -151,7 +195,7 @@ body {
   align-items: center;
   gap: 4px;
   background-color: var(--bg-app);
-  padding: 4px;
+  padding: 3px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-light);
 }
@@ -201,16 +245,20 @@ body {
   color: var(--text-sub);
 }
 
+.nav-tab .badge:empty {
+  display: none;
+}
+
 .nav-tab.active .badge {
   background: var(--primary-light);
   color: var(--primary);
 }
 
-/* 헤더 우측 유틸리티 */
+/* 헤더 우측 */
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .status-indicator {
@@ -228,7 +276,6 @@ body {
   height: 7px;
   background-color: var(--success);
   border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
   animation: pulse-dot 2s infinite;
 }
 
@@ -245,7 +292,7 @@ body {
 }
 
 .clock-display {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--text-sub);
   background: var(--bg-subtle);
@@ -261,20 +308,20 @@ body {
 }
 
 /* ==========================================================================
-   버튼 및 공통 UI 요소
+   버튼 및 공통 UI
    ========================================================================== */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 7px 12px;
+  padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease-in-out;
+  transition: all 0.15s;
   user-select: none;
   white-space: nowrap;
 }
@@ -305,6 +352,15 @@ body {
 
 .btn-success:hover {
   background-color: var(--success-hover);
+}
+
+.btn-purple {
+  background-color: var(--purple);
+  color: #ffffff;
+}
+
+.btn-purple:hover {
+  background-color: #6d28d9;
 }
 
 .btn-outline {
@@ -350,7 +406,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background-color: var(--bg-app);
 }
 
@@ -358,7 +414,7 @@ body {
   display: none;
   flex-direction: column;
   height: 100%;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tab-pane.active {
@@ -370,7 +426,7 @@ body {
   background-color: #ffffff;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 8px 14px;
+  padding: 7px 12px;
   box-shadow: var(--shadow-sm);
   flex-shrink: 0;
 }
@@ -385,7 +441,7 @@ body {
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .toolbar-label {
@@ -400,14 +456,8 @@ body {
   color: #ffffff;
   font-size: 11px;
   font-weight: 700;
-  padding: 3px 7px;
+  padding: 3px 8px;
   border-radius: var(--radius-sm);
-}
-
-.label-desc {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-sub);
 }
 
 .date-picker-wrap {
@@ -417,6 +467,11 @@ body {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+.date-picker-wrap.highlight-start-date {
+  border: 2px solid var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 .btn-date-nav {
@@ -436,35 +491,50 @@ body {
 
 .input-date {
   border: none;
-  padding: 5px 8px;
+  padding: 4px 7px;
   font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-main);
+  font-weight: 700;
+  color: var(--primary);
   outline: none;
   background: #ffffff;
 }
 
-.input-date:focus {
-  background: var(--primary-light);
-}
-
 .date-range-badge {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-sub);
   background-color: var(--bg-subtle);
-  padding: 4px 9px;
+  padding: 3px 8px;
   border-radius: var(--radius-sm);
   border: 1px dashed #cbd5e1;
 }
 
+.date-status-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 12px;
+}
+
+.date-status-pill.has-data {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.date-status-pill.no-data {
+  background: #f8fafc;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+}
+
 /* ==========================================================================
-   와이드 데이터 그리드 / 테이블 (16:9 가로 스크롤 최소화)
+   생산현황 분할 레이아웃 & 테이블 (공정검사 / 자동화조립)
    ========================================================================== */
 .inspection-split-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -484,7 +554,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 6px 12px;
   background-color: #ffffff;
   border-bottom: 1px solid var(--border-light);
 }
@@ -494,7 +564,7 @@ body {
 }
 
 .table-section-header.header-assembly {
-  border-left: 4px solid #8b5cf6;
+  border-left: 4px solid var(--purple);
 }
 
 .section-title-wrap {
@@ -508,7 +578,6 @@ body {
   font-weight: 700;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
-  letter-spacing: 0.3px;
 }
 
 .badge-process {
@@ -517,13 +586,13 @@ body {
 }
 
 .badge-assembly {
-  background: #f5f3ff;
-  color: #7c3aed;
-  border: 1px solid #ddd6fe;
+  background: var(--purple-light);
+  color: var(--purple);
+  border: 1px solid var(--purple-border);
 }
 
 .section-title {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-main);
 }
@@ -554,9 +623,12 @@ body {
   border-color: var(--primary-border);
 }
 
-.summary-pill.pill-balance {
-  background: #f8fafc;
-  font-weight: 600;
+/* 잔량 강조: 선명한 적색(Red) */
+.summary-pill.pill-balance-red {
+  background: #fef2f2;
+  color: var(--danger);
+  border: 1px solid #fecaca;
+  font-weight: 700;
 }
 
 .header-assembly-group {
@@ -564,8 +636,10 @@ body {
   color: #5b21b6 !important;
 }
 
+/* ==========================================================================
+   와이드 데이터 그리드
+   ========================================================================== */
 .table-container {
-  flex: 1;
   background-color: #ffffff;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
@@ -583,7 +657,6 @@ body {
   text-align: left;
 }
 
-/* 테이블 헤더 */
 .grid-table thead {
   position: sticky;
   top: 0;
@@ -595,55 +668,51 @@ body {
   background-color: var(--th-bg);
   color: var(--th-text);
   font-weight: 700;
-  padding: 7px 8px;
+  padding: 6px 7px;
   border-bottom: 1px solid var(--td-border);
   border-right: 1px solid var(--td-border);
   text-align: center;
   vertical-align: middle;
-  font-size: 12px;
+  font-size: 11.5px;
   white-space: nowrap;
-}
-
-.header-row-primary th {
-  border-bottom: 1px solid #cbd5e1;
 }
 
 .col-group-header {
   background-color: #e2e8f0 !important;
   color: var(--text-main) !important;
-  font-size: 12px !important;
-  letter-spacing: -0.2px;
+  font-size: 11.5px !important;
 }
 
-/* 주말 날짜 헤더 색상 구분 */
+/* 날짜 헤더 */
 .th-date {
-  padding: 5px 6px !important;
-  min-width: 68px;
-  font-size: 11.5px;
+  padding: 4px 5px !important;
+  min-width: 62px;
+  font-size: 11px;
 }
 
 .th-date .date-sub {
   display: block;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  margin-top: 1px;
 }
 
 .th-date.is-sat {
   background-color: var(--sat-bg) !important;
   color: var(--sat-text) !important;
-  border-color: var(--sat-border) !important;
+  min-width: 46px; /* 토요일 슬림화 */
+  width: 46px;
 }
 
 .th-date.is-sun {
   background-color: var(--sun-bg) !important;
   color: var(--sun-text) !important;
-  border-color: var(--sun-border) !important;
+  min-width: 46px; /* 일요일 슬림화 */
+  width: 46px;
 }
 
 /* 테이블 본문 셀 */
 .grid-table td {
-  padding: 4px 6px;
+  padding: 3px 5px;
   border-bottom: 1px solid var(--td-border);
   border-right: 1px solid var(--td-border);
   vertical-align: middle;
@@ -654,27 +723,30 @@ body {
   background-color: var(--td-hover);
 }
 
-/* 특정 열 너비 지정 */
-.col-no { width: 44px; text-align: center; }
-.col-item { width: 170px; min-width: 150px; font-weight: 600; color: var(--text-main); }
-.col-weekly { width: 85px; min-width: 75px; text-align: right; }
-.col-completed { width: 85px; min-width: 75px; text-align: right; }
-.col-balance { width: 85px; min-width: 75px; text-align: right; }
+/* 특정 열 너비 */
+.col-no { width: 40px; text-align: center; }
+.col-item { width: 170px; min-width: 150px; font-weight: 600; }
+.col-weekly { width: 75px; text-align: right; }
+.col-completed { width: 75px; text-align: right; }
+.col-balance { width: 75px; text-align: right; }
+.col-balance-th { width: 75px; color: var(--danger) !important; }
 
-.col-item-prod { width: 220px; min-width: 180px; }
-.col-lot { width: 140px; min-width: 120px; }
-.col-qty { width: 95px; min-width: 80px; text-align: right; }
-.col-worker-time { min-width: 75px; width: 85px; text-align: right; }
-.col-action { width: 50px; text-align: center; }
+/* 생산일정 열 너비 최적화 */
+.col-item-prod { width: 160px; min-width: 140px; }
+.col-note { width: 130px; min-width: 100px; }
+.col-lot { width: 100px; min-width: 90px; text-align: center; }
+.col-qty { width: 75px; min-width: 65px; text-align: right; }
+.col-worker-time { min-width: 65px; width: 70px; text-align: right; }
+.col-action { width: 44px; text-align: center; }
 
 /* 셀 입력 필드 */
 .cell-input {
   width: 100%;
-  height: 28px;
+  height: 26px;
   padding: 2px 6px;
   border: 1px solid transparent;
   background-color: transparent;
-  font-size: 12.5px;
+  font-size: 12px;
   border-radius: var(--radius-sm);
   outline: none;
   transition: all 0.15s;
@@ -688,43 +760,45 @@ body {
 .cell-input:focus {
   background-color: #ffffff;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+  z-index: 2;
 }
 
-.cell-input.text-right {
-  text-align: right;
-}
+.cell-input.text-right { text-align: right; }
+.cell-input.text-center { text-align: center; }
 
-.cell-input.text-center {
-  text-align: center;
+/* 주말 입력 차단 스타일 */
+.cell-input:disabled, .cell-input.is-weekend-locked {
+  background-color: #f1f5f9;
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* 셀렉트 드롭다운 */
 .cell-select {
   width: 100%;
-  height: 28px;
-  padding: 2px 6px;
+  height: 26px;
+  padding: 2px 5px;
   border: 1px solid var(--border-light);
   background-color: #ffffff;
-  font-size: 12.5px;
+  font-size: 12px;
   border-radius: var(--radius-sm);
   outline: none;
-  color: var(--text-main);
   cursor: pointer;
 }
 
 .cell-select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
 
-/* 계산된 읽기 전용 셀 */
+/* 계산 셀 */
 .calc-cell {
   background-color: var(--readonly-bg) !important;
-  font-weight: 600;
+  font-weight: 700;
   text-align: right;
-  padding-right: 8px;
-  color: var(--text-main);
+  padding-right: 6px;
   user-select: text;
 }
 
@@ -732,29 +806,17 @@ body {
   color: var(--primary);
 }
 
-.calc-cell.balance-ok {
-  color: var(--success);
-}
-
-.calc-cell.balance-remain {
-  color: var(--text-main);
-}
-
-.calc-cell.balance-over {
-  color: var(--danger);
+/* 잔량 셀: 항상 적색(Red) 표시 */
+.calc-cell.col-balance {
+  color: var(--danger) !important;
   font-weight: 700;
 }
 
-/* 주말 일자별 셀 배경 은은한 틴트 */
-.td-sat {
-  background-color: #f8fbff !important;
-}
+/* 주말 셀 배경 */
+.td-sat { background-color: #f8fbff !important; width: 46px; }
+.td-sun { background-color: #fff9f9 !important; width: 46px; }
 
-.td-sun {
-  background-color: #fff9f9 !important;
-}
-
-/* 테이블 푸터 (합계행 고정) */
+/* 테이블 푸터 (합계) */
 .grid-table tfoot {
   position: sticky;
   bottom: 0;
@@ -767,8 +829,8 @@ body {
   border-top: 2px solid #cbd5e1;
   border-bottom: none;
   font-weight: 700;
-  padding: 8px 6px;
-  font-size: 12px;
+  padding: 6px 5px;
+  font-size: 11.5px;
 }
 
 .summary-label {
@@ -777,23 +839,44 @@ body {
   color: var(--text-sub);
 }
 
-.summary-empty {
-  background-color: #f1f5f9;
+/* ==========================================================================
+   설정 화면 3컬럼 그리드 (생산현황 품목 / 생산일정 품목 / 작업자 관리)
+   ========================================================================== */
+.settings-items-sync-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
 }
 
-/* 폰트/유틸 */
-.font-bold { font-weight: 700; }
-.text-primary { color: var(--primary); }
-.text-success { color: var(--success); }
-.text-muted { color: var(--text-muted); }
+.sync-desc-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-/* ==========================================================================
-   탭 3: 마스터 설정 카드 레이아웃
-   ========================================================================== */
-.settings-grid {
+.sync-title {
+  font-size: 12.5px;
+}
+
+.sync-sub {
+  font-size: 11px;
+}
+
+.sync-btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+.settings-grid-3col {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
   flex: 1;
   overflow: hidden;
 }
@@ -812,7 +895,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-light);
   background-color: #ffffff;
 }
@@ -820,12 +903,12 @@ body {
 .card-title-wrap {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .card-icon-box {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -833,61 +916,54 @@ body {
 }
 
 .card-icon-box svg {
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
 }
 
-.card-icon-box.blue {
-  background-color: var(--primary-light);
-  color: var(--primary);
-}
-
-.card-icon-box.green {
-  background-color: var(--success-light);
-  color: var(--success);
-}
+.card-icon-box.blue { background-color: var(--primary-light); color: var(--primary); }
+.card-icon-box.purple { background-color: var(--purple-light); color: var(--purple); }
+.card-icon-box.green { background-color: var(--success-light); color: var(--success); }
 
 .card-title {
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-main);
 }
 
 .card-subtitle {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-sub);
-  margin-top: 2px;
 }
 
 .count-badge {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-sub);
   background-color: var(--bg-subtle);
-  padding: 4px 10px;
-  border-radius: 20px;
+  padding: 3px 8px;
+  border-radius: 12px;
   border: 1px solid var(--border-light);
 }
 
 .settings-card-body {
-  padding: 16px 18px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  gap: 12px;
+  gap: 10px;
 }
 
 .inline-add-form {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .form-input {
   flex: 1;
-  height: 36px;
-  padding: 0 12px;
-  font-size: 13px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   outline: none;
@@ -909,12 +985,12 @@ body {
 .master-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .master-table th {
   background-color: var(--th-bg);
-  padding: 8px 12px;
+  padding: 6px 10px;
   font-weight: 700;
   color: var(--th-text);
   border-bottom: 1px solid var(--td-border);
@@ -923,7 +999,7 @@ body {
 }
 
 .master-table td {
-  padding: 7px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--td-border);
   vertical-align: middle;
 }
@@ -934,8 +1010,8 @@ body {
 
 .master-edit-input {
   width: 100%;
-  padding: 4px 8px;
-  font-size: 12.5px;
+  padding: 3px 6px;
+  font-size: 12px;
   border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
   outline: none;
@@ -943,18 +1019,18 @@ body {
 
 .guide-banner {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   background-color: #ffffff;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 10px 16px;
+  padding: 8px 14px;
   box-shadow: var(--shadow-sm);
   flex-shrink: 0;
 }
 
 .guide-item {
   flex: 1;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-sub);
   line-height: 1.4;
 }
@@ -963,9 +1039,7 @@ body {
   color: var(--text-main);
 }
 
-/* ==========================================================================
-   우측 상단 실시간 Toast 상태 메시지 (1.5초 노출 후 부드러운 퇴장)
-   ========================================================================== */
+/* Toast */
 .toast-container {
   position: fixed;
   top: 16px;
@@ -982,7 +1056,7 @@ body {
   color: #ffffff;
   padding: 10px 16px;
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform: translateY(-20px) scale(0.95);
   opacity: 0;
@@ -996,8 +1070,8 @@ body {
 }
 
 .toast-icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   background-color: var(--success);
   border-radius: 50%;
   display: flex;
@@ -1007,32 +1081,12 @@ body {
   flex-shrink: 0;
 }
 
-.toast-icon svg {
-  width: 14px;
-  height: 14px;
-}
+.toast-icon svg { width: 13px; height: 13px; }
+.toast-title { font-size: 12.5px; font-weight: 700; }
+.toast-time { font-size: 10px; color: #94a3b8; }
 
-.toast-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.toast-title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-}
-
-.toast-time {
-  font-size: 10.5px;
-  color: #94a3b8;
-}
-
-/* ==========================================================================
-   미디어 쿼리 및 반응형 (16:9 와이드 모니터 기준)
-   ========================================================================== */
 @media (max-width: 1200px) {
-  .settings-grid {
+  .settings-grid-3col {
     grid-template-columns: 1fr;
   }
 }
