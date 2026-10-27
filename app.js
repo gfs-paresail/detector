@@ -1,19 +1,48 @@
 /**
  * 감지기 생산현황 관리 시스템 - 프런트엔드 애플리케이션 코어 로직
- * (검정 일정, 생산 일정, 마스터 설정, 일별 독립 자동저장, 로트 마스킹, 실시간 Toast)
+ * (Google Firebase Cloud Firestore 실시간 양방향 클라우드 DB 연동)
+ * - 공정검사 / 자동화조립 2단 분할
+ * - 11일간 날짜 연산 & 주말 색상 시각화
+ * - 실시간 클라우드 자동저장 및 1.5초 Toast
+ * - 로트번호 포맷 마스킹 및 불변 문자열 보존
+ * - 마스터 품목/작업자 전 기기 실시간 동기화
  */
 
 (function () {
   'use strict';
 
   // =========================================================================
-  // 1. 초기 상수 및 마스터 기본 데이터
+  // 1. Firebase 설정 (Google Cloud Firestore - detectorDB)
   // =========================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyDw5xFYRJnA4tQF5k6WM2hs0DDv60ad0bo",
+    authDomain: "detectordb-c9771.firebaseapp.com",
+    projectId: "detectordb-c9771",
+    storageBucket: "detectordb-c9771.firebasestorage.app",
+    messagingSenderId: "381997617419",
+    appId: "1:381997617419:web:6abf156bb56bfd71ae520e",
+    measurementId: "G-F528310ENY"
+  };
+
+  let db = null;
+  let isFirestoreActive = false;
+
+  // 실시간 Firestore 구독 해제 핸들러들
+  let unsubscribeInspection = null;
+  let unsubscribeProduction = null;
+  let unsubscribeMasterItems = null;
+  let unsubscribeMasterWorkers = null;
+
+  // 디바운스 타이머
+  let saveInspectionDebounceTimer = null;
+  let saveProductionDebounceTimer = null;
+
+  // 로컬 저장소 키 (오프라인 백업 및 캐시용)
   const STORAGE_KEYS = {
-    MASTER_ITEMS: 'pms_master_items_v1',
-    MASTER_WORKERS: 'pms_master_workers_v1',
-    INSPECTION_PREFIX: 'pms_inspection_v1_',
-    PRODUCTION_PREFIX: 'pms_production_v1_'
+    MASTER_ITEMS: 'pms_master_items_v2',
+    MASTER_WORKERS: 'pms_master_workers_v2',
+    INSPECTION_PREFIX: 'pms_inspection_v2_',
+    PRODUCTION_PREFIX: 'pms_production_v2_'
   };
 
   // 초기 기본 품목 (감지기 전문 품목)
@@ -49,8 +78,8 @@
     productionDate: getTodayDateString(),
     items: [],
     workers: [],
-    inspectionData: {}, // { itemId: { weeklyQty: number, dailyQuantities: [11] } }
-    productionRows: []  // [ { id, itemId, lotNo, qty, workerHours: { [workerId]: number } } ]
+    inspectionData: { process: {}, assembly: {} },
+    productionRows: []
   };
 
   let toastTimer = null;
@@ -101,7 +130,7 @@
   }
 
   // =========================================================================
-  // 4. Toast 알림 매니저 (1.5초 노출 후 부드러운 퇴장)
+  // 4. Toast 알림 및 상태 인디케이터
   // =========================================================================
   function showToast(message = '저장되었습니다') {
     const toast = document.getElementById('toast');
@@ -114,7 +143,7 @@
     if (toastTimestamp) {
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-      toastTimestamp.textContent = `${timeStr} 자동저장 완료`;
+      toastTimestamp.textContent = `${timeStr} 클라우드 저장`;
     }
 
     toast.classList.add('show');
@@ -129,94 +158,264 @@
     }, 1500);
   }
 
-  // =========================================================================
-  // 5. 로컬스토리지 영속성 관리
-  // =========================================================================
-  function loadMasterData() {
-    try {
-      const rawItems = localStorage.getItem(STORAGE_KEYS.MASTER_ITEMS);
-      state.items = rawItems ? JSON.parse(rawItems) : [...DEFAULT_ITEMS];
+  function updateDbStatus(isConnected, message) {
+    const badge = document.getElementById('db-status-badge');
+    const dot = document.getElementById('db-status-dot');
+    const text = document.getElementById('db-status-text');
 
-      const rawWorkers = localStorage.getItem(STORAGE_KEYS.MASTER_WORKERS);
-      state.workers = rawWorkers ? JSON.parse(rawWorkers) : [...DEFAULT_WORKERS];
-    } catch (e) {
-      console.error('마스터 데이터 로드 오류:', e);
-      state.items = [...DEFAULT_ITEMS];
-      state.workers = [...DEFAULT_WORKERS];
+    if (text) text.textContent = message;
+    if (dot) {
+      dot.style.backgroundColor = isConnected ? '#10b981' : '#f59e0b';
     }
-    saveMasterData(false);
+    if (badge) {
+      badge.style.backgroundColor = isConnected ? '#ecfdf5' : '#fffbeb';
+      badge.style.borderColor = isConnected ? '#a7f3d0' : '#fde68a';
+    }
+  }
+
+  // =========================================================================
+  // 5. Firebase Cloud Firestore 실시간 초기화 및 영속성 동기화
+  // =========================================================================
+  function initFirebase() {
+    if (typeof firebase !== 'undefined' && firebase.initializeApp) {
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.firestore();
+        isFirestoreActive = true;
+        updateDbStatus(true, 'Firestore 실시간 연결됨 (detectorDB)');
+        console.log('Firebase Cloud Firestore 실시간 DB 활성화 완료');
+
+        // Firestore 실시간 리스너 시작
+        subscribeMasterData();
+        subscribeInspectionData(state.inspectionDate);
+        subscribeProductionData(state.productionDate);
+      } catch (err) {
+        console.warn('Firebase 초기화 오류, 로컬 모드로 동작합니다:', err);
+        isFirestoreActive = false;
+        updateDbStatus(false, '로컬 모드 (오프라인)');
+        loadMasterDataFromLocal();
+        loadInspectionDataFromLocal(state.inspectionDate);
+        loadProductionDataFromLocal(state.productionDate);
+        renderAll();
+      }
+    } else {
+      console.warn('Firebase SDK를 찾을 수 없어 로컬 모드로 전환합니다.');
+      isFirestoreActive = false;
+      updateDbStatus(false, '로컬 모드 (오프라인)');
+      loadMasterDataFromLocal();
+      loadInspectionDataFromLocal(state.inspectionDate);
+      loadProductionDataFromLocal(state.productionDate);
+      renderAll();
+    }
+  }
+
+  // --- 마스터 데이터 동기화 (Items & Workers) ---
+  function subscribeMasterData() {
+    if (!isFirestoreActive || !db) return;
+
+    // 마스터 품목 구독
+    const itemsDocRef = db.collection('pms_metadata').doc('master_items');
+    unsubscribeMasterItems = itemsDocRef.onSnapshot((doc) => {
+      if (doc.exists && Array.isArray(doc.data().items)) {
+        state.items = doc.data().items;
+      } else {
+        // 최초 초기화
+        state.items = [...DEFAULT_ITEMS];
+        itemsDocRef.set({ items: state.items });
+      }
+      localStorage.setItem(STORAGE_KEYS.MASTER_ITEMS, JSON.stringify(state.items));
+      renderMasterItems();
+      renderInspectionTable();
+      renderProductionTable();
+    }, (error) => {
+      console.error('마스터 품목 실시간 구독 에러:', error);
+      loadMasterDataFromLocal();
+    });
+
+    // 마스터 작업자 구독
+    const workersDocRef = db.collection('pms_metadata').doc('master_workers');
+    unsubscribeMasterWorkers = workersDocRef.onSnapshot((doc) => {
+      if (doc.exists && Array.isArray(doc.data().workers)) {
+        state.workers = doc.data().workers;
+      } else {
+        state.workers = [...DEFAULT_WORKERS];
+        workersDocRef.set({ workers: state.workers });
+      }
+      localStorage.setItem(STORAGE_KEYS.MASTER_WORKERS, JSON.stringify(state.workers));
+      renderMasterWorkers();
+      renderProductionTable();
+    }, (error) => {
+      console.error('마스터 작업자 실시간 구독 에러:', error);
+      loadMasterDataFromLocal();
+    });
   }
 
   function saveMasterData(triggerToast = true) {
+    localStorage.setItem(STORAGE_KEYS.MASTER_ITEMS, JSON.stringify(state.items));
+    localStorage.setItem(STORAGE_KEYS.MASTER_WORKERS, JSON.stringify(state.workers));
+
+    if (isFirestoreActive && db) {
+      db.collection('pms_metadata').doc('master_items').set({ items: state.items }).catch(e => console.error(e));
+      db.collection('pms_metadata').doc('master_workers').set({ workers: state.workers }).catch(e => console.error(e));
+    }
+    if (triggerToast) showToast('마스터 설정이 클라우드에 저장되었습니다');
+  }
+
+  function loadMasterDataFromLocal() {
     try {
-      localStorage.setItem(STORAGE_KEYS.MASTER_ITEMS, JSON.stringify(state.items));
-      localStorage.setItem(STORAGE_KEYS.MASTER_WORKERS, JSON.stringify(state.workers));
-      if (triggerToast) showToast('마스터 설정이 저장되었습니다');
+      const rawItems = localStorage.getItem(STORAGE_KEYS.MASTER_ITEMS);
+      state.items = rawItems ? JSON.parse(rawItems) : [...DEFAULT_ITEMS];
+      const rawWorkers = localStorage.getItem(STORAGE_KEYS.MASTER_WORKERS);
+      state.workers = rawWorkers ? JSON.parse(rawWorkers) : [...DEFAULT_WORKERS];
     } catch (e) {
-      console.error('마스터 데이터 저장 오류:', e);
+      state.items = [...DEFAULT_ITEMS];
+      state.workers = [...DEFAULT_WORKERS];
     }
   }
 
-  function loadInspectionData(dateStr) {
+  // --- 검정 일정 동기화 (공정검사 / 자동화조립) ---
+  function subscribeInspectionData(dateStr) {
+    if (!isFirestoreActive || !db) {
+      loadInspectionDataFromLocal(dateStr);
+      renderInspectionTable();
+      return;
+    }
+
+    if (unsubscribeInspection) {
+      unsubscribeInspection();
+    }
+
+    const docRef = db.collection('pms_inspection').doc(dateStr);
+    unsubscribeInspection = docRef.onSnapshot((doc) => {
+      if (doc.exists) {
+        const data = doc.data();
+        state.inspectionData = {
+          process: data.process || {},
+          assembly: data.assembly || {}
+        };
+      } else {
+        state.inspectionData = { process: {}, assembly: {} };
+      }
+      localStorage.setItem(STORAGE_KEYS.INSPECTION_PREFIX + dateStr, JSON.stringify(state.inspectionData));
+      
+      // 현재 포커스 중인 엘리먼트가 없거나, 검정 일정 인풋이 아닐 때만 리렌더링
+      const activeEl = document.activeElement;
+      if (!activeEl || !activeEl.classList.contains('input-daily-qty') && !activeEl.classList.contains('input-weekly-qty')) {
+        renderInspectionTable();
+      } else {
+        // 백그라운드 값 및 계산 합계만 부드럽게 갱신
+        updateAllInspectionCalculations();
+      }
+    }, (error) => {
+      console.error('검정 일정 구독 오류:', error);
+      loadInspectionDataFromLocal(dateStr);
+      renderInspectionTable();
+    });
+  }
+
+  function saveInspectionData(triggerToast = true) {
+    // 로컬 즉시 백업
+    localStorage.setItem(STORAGE_KEYS.INSPECTION_PREFIX + state.inspectionDate, JSON.stringify(state.inspectionData));
+
+    if (triggerToast) showToast('클라우드 DB에 저장되었습니다');
+
+    if (isFirestoreActive && db) {
+      if (saveInspectionDebounceTimer) clearTimeout(saveInspectionDebounceTimer);
+      saveInspectionDebounceTimer = setTimeout(() => {
+        db.collection('pms_inspection').doc(state.inspectionDate).set({
+          process: state.inspectionData.process || {},
+          assembly: state.inspectionData.assembly || {},
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(err => {
+          console.error('검정 일정 Firestore 저장 실패:', err);
+        });
+      }, 300);
+    }
+  }
+
+  function loadInspectionDataFromLocal(dateStr) {
     try {
       const key = STORAGE_KEYS.INSPECTION_PREFIX + dateStr;
       const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        // 이전 단일 테이블 버전 호환 마이그레이션 처리
-        if (parsed && !parsed.process && !parsed.assembly) {
-          state.inspectionData = {
-            process: parsed,
-            assembly: {}
-          };
-        } else {
-          state.inspectionData = {
-            process: parsed.process || {},
-            assembly: parsed.assembly || {}
-          };
-        }
+        state.inspectionData = {
+          process: parsed.process || parsed || {},
+          assembly: parsed.assembly || {}
+        };
       } else {
         state.inspectionData = { process: {}, assembly: {} };
       }
     } catch (e) {
-      console.error('검정 일정 로드 오류:', e);
       state.inspectionData = { process: {}, assembly: {} };
     }
   }
 
-  function saveInspectionData(triggerToast = true) {
-    try {
-      const key = STORAGE_KEYS.INSPECTION_PREFIX + state.inspectionDate;
-      localStorage.setItem(key, JSON.stringify(state.inspectionData));
-      if (triggerToast) showToast('저장되었습니다');
-    } catch (e) {
-      console.error('검정 일정 저장 오류:', e);
+  // --- 생산 일정 동기화 ---
+  function subscribeProductionData(dateStr) {
+    if (!isFirestoreActive || !db) {
+      loadProductionDataFromLocal(dateStr);
+      renderProductionTable();
+      return;
+    }
+
+    if (unsubscribeProduction) {
+      unsubscribeProduction();
+    }
+
+    const docRef = db.collection('pms_production').doc(dateStr);
+    unsubscribeProduction = docRef.onSnapshot((doc) => {
+      if (doc.exists && Array.isArray(doc.data().rows)) {
+        state.productionRows = doc.data().rows;
+      } else {
+        state.productionRows = [createDefaultProductionRow()];
+      }
+      localStorage.setItem(STORAGE_KEYS.PRODUCTION_PREFIX + dateStr, JSON.stringify(state.productionRows));
+
+      const activeEl = document.activeElement;
+      if (!activeEl || (!activeEl.classList.contains('input-prod-qty') && !activeEl.classList.contains('input-worker-hour') && !activeEl.classList.contains('input-prod-lot'))) {
+        renderProductionTable();
+      } else {
+        calculateProductionTotals();
+      }
+    }, (error) => {
+      console.error('생산 일정 구독 오류:', error);
+      loadProductionDataFromLocal(dateStr);
+      renderProductionTable();
+    });
+  }
+
+  function saveProductionData(triggerToast = true) {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTION_PREFIX + state.productionDate, JSON.stringify(state.productionRows));
+
+    if (triggerToast) showToast('클라우드 DB에 저장되었습니다');
+
+    if (isFirestoreActive && db) {
+      if (saveProductionDebounceTimer) clearTimeout(saveProductionDebounceTimer);
+      saveProductionDebounceTimer = setTimeout(() => {
+        db.collection('pms_production').doc(state.productionDate).set({
+          rows: state.productionRows,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(err => {
+          console.error('생산 일정 Firestore 저장 실패:', err);
+        });
+      }, 300);
     }
   }
 
-  function loadProductionData(dateStr) {
+  function loadProductionDataFromLocal(dateStr) {
     try {
       const key = STORAGE_KEYS.PRODUCTION_PREFIX + dateStr;
       const raw = localStorage.getItem(key);
       if (raw) {
         state.productionRows = JSON.parse(raw);
       } else {
-        // 기본 1행 생성
         state.productionRows = [createDefaultProductionRow()];
       }
     } catch (e) {
-      console.error('생산 일정 로드 오류:', e);
       state.productionRows = [createDefaultProductionRow()];
-    }
-  }
-
-  function saveProductionData(triggerToast = true) {
-    try {
-      const key = STORAGE_KEYS.PRODUCTION_PREFIX + state.productionDate;
-      localStorage.setItem(key, JSON.stringify(state.productionRows));
-      if (triggerToast) showToast('저장되었습니다');
-    } catch (e) {
-      console.error('생산 일정 저장 오류:', e);
     }
   }
 
@@ -234,7 +433,7 @@
   }
 
   // =========================================================================
-  // 6. 탭 1: [검정 일정] 렌더링 및 계산 로직 (공정검사 / 자동화조립 2단 분할)
+  // 6. 탭 1: [검정 일정] 렌더링 및 계산 (공정검사 / 자동화조립 2단 분할)
   // =========================================================================
   const INSPECTION_SECTIONS = [
     {
@@ -268,7 +467,6 @@
   function renderInspectionHeaders() {
     const baseDate = state.inspectionDate;
 
-    // 공정검사 및 자동화조립 두 테이블의 날짜 헤더 동시 렌더링
     INSPECTION_SECTIONS.forEach(sec => {
       const headerRow = document.getElementById(sec.headerDatesId);
       if (!headerRow) return;
@@ -298,7 +496,6 @@
       }
     });
 
-    // 툴바 뱃지 업데이트
     const rangeBadge = document.getElementById('insp-date-range-badge');
     if (rangeBadge) {
       const startDate = addDays(baseDate, 0);
@@ -315,7 +512,6 @@
     const badge = document.getElementById('badge-inspection-items');
     if (badge) badge.textContent = state.items.length;
 
-    // 공정검사와 자동화조립 두 섹션 각각 렌더링
     INSPECTION_SECTIONS.forEach(sec => {
       renderSingleInspectionSection(sec);
     });
@@ -382,7 +578,6 @@
         </td>
       `;
 
-      // 11일간 일자별 생산량 셀
       for (let dayIdx = 0; dayIdx < 11; dayIdx++) {
         const dateObj = addDays(baseDate, dayIdx);
         const dayOfWeekIdx = dateObj.getDay();
@@ -442,7 +637,6 @@
       }
     });
 
-    // 푸터 엘리먼트 갱신
     const sumWeeklyEl = document.getElementById(sec.sumWeeklyId);
     const sumCompletedEl = document.getElementById(sec.sumCompletedId);
     const sumBalanceEl = document.getElementById(sec.sumBalanceId);
@@ -454,7 +648,6 @@
       sumBalanceEl.className = `num-cell font-bold ${getBalanceClass(totalBalance)}`;
     }
 
-    // 섹션 헤더 요약 뱃지 갱신
     const pillWeekly = document.getElementById(sec.pillWeeklyId);
     const pillCompleted = document.getElementById(sec.pillCompletedId);
     const pillBalance = document.getElementById(sec.pillBalanceId);
@@ -466,7 +659,6 @@
       pillBalance.className = getBalanceClass(totalBalance) === 'balance-over' ? 'text-danger font-bold' : '';
     }
 
-    // 11일간 푸터 셀 렌더링
     const tfootRow = document.getElementById(sec.tfootId);
     if (tfootRow) {
       while (tfootRow.children.length > 5) {
@@ -482,10 +674,15 @@
     }
   }
 
+  function updateAllInspectionCalculations() {
+    INSPECTION_SECTIONS.forEach(sec => {
+      state.items.forEach(item => updateRowCalculations(sec.key, item.id));
+      calculateSectionTotals(sec);
+    });
+  }
+
   function attachInspectionEventListeners() {
-    // 모든 주간물량 인풋 제어
     document.querySelectorAll('.input-weekly-qty').forEach(input => {
-      // 기존 리스너 중복 방지를 위해 cloneNode 또는 oninput 사용
       input.oninput = function () {
         const cleaned = this.value.replace(/[^0-9]/g, '');
         this.value = cleaned;
@@ -506,7 +703,6 @@
       };
     });
 
-    // 모든 일자별 생산량 인풋 제어
     document.querySelectorAll('.input-daily-qty').forEach(input => {
       input.oninput = function () {
         const cleaned = this.value.replace(/[^0-9]/g, '');
@@ -608,7 +804,6 @@
       const tr = document.createElement('tr');
       tr.dataset.rowId = row.id;
 
-      // 품목 셀렉트 옵션들 생성
       let itemOptions = '';
       if (state.items.length === 0) {
         itemOptions = '<option value="">품목 없음 (설정에서 등록)</option>';
@@ -619,7 +814,6 @@
         }).join('');
       }
 
-      // 기본 열들 (No, 품명 Select, 로트번호, 생산수량)
       let html = `
         <td class="col-no">${index + 1}</td>
         <td class="col-item-prod">
@@ -642,7 +836,6 @@
         </td>
       `;
 
-      // 작업자별 작업시간 입력 필드들 (E~M열)
       if (state.workers.length === 0) {
         html += `<td style="text-align:center; color: var(--text-muted);">-</td>`;
       } else {
@@ -663,7 +856,6 @@
         });
       }
 
-      // 관리 (삭제)
       html += `
         <td class="col-action">
           <button type="button" class="btn btn-sm btn-danger-ghost btn-delete-prod-row" data-row-id="${row.id}" title="행 삭제">
@@ -700,20 +892,15 @@
       }
     });
 
-    // 푸터 수량 합계 갱신
     const sumQtyEl = document.getElementById('sum-prod-qty');
     if (sumQtyEl) sumQtyEl.textContent = formatNumber(totalQty);
 
-    // 푸터 작업자별 합계 갱신
     const tfootRow = document.getElementById('production-tfoot');
     if (tfootRow) {
-      // 기존 합계 td들 (앞 2개 td 제외하고 마지막 1개 빈 td 직전까지) 재구성
       while (tfootRow.children.length > 2) {
         tfootRow.removeChild(tfootRow.children[1]);
       }
 
-      // index 0: 일일 합계 레이블, index 1: 총 수량
-      // 그 뒤에 작업자별 합계 td들 삽입
       if (state.workers.length === 0) {
         const td = document.createElement('td');
         td.className = 'summary-empty';
@@ -723,7 +910,6 @@
           const td = document.createElement('td');
           td.className = 'num-cell text-right font-bold';
           const sum = workerTotals[w.id] || 0;
-          // 소수점 1자리 포맷
           td.textContent = sum % 1 === 0 ? sum.toFixed(0) : sum.toFixed(1);
           tfootRow.insertBefore(td, tfootRow.lastChild);
         });
@@ -735,36 +921,29 @@
     const tbody = document.getElementById('production-tbody');
     if (!tbody) return;
 
-    // 품명 선택 드롭다운 변경
     tbody.querySelectorAll('.select-prod-item').forEach(select => {
-      select.addEventListener('change', function () {
+      select.onchange = function () {
         const rowId = this.dataset.rowId;
         const row = state.productionRows.find(r => r.id === rowId);
         if (row) {
           row.itemId = this.value;
           saveProductionData(true);
         }
-      });
+      };
     });
 
-    // 로트번호 입력 및 마스킹 (현재 연도 기준 YY-000 형태 유지 & String 고정 저장)
     tbody.querySelectorAll('.input-prod-lot').forEach(input => {
-      input.addEventListener('focus', function () {
+      input.onfocus = function () {
         if (!this.value.trim()) {
           const currentYear = new Date().getFullYear();
           const yy = String(currentYear).slice(-2);
           this.value = `${yy}-`;
         }
-      });
+      };
 
-      input.addEventListener('input', function () {
-        let val = this.value.toUpperCase();
-        
-        // 연도 2자리 - 숫자 규칙 마스킹 로직
-        // 허용 문자: 숫자와 하이픈
-        val = val.replace(/[^0-9\-]/g, '');
+      input.oninput = function () {
+        let val = this.value.toUpperCase().replace(/[^0-9\-]/g, '');
 
-        // 하이픈이 없고 길이가 2자 이상이면 자동으로 하이픈 삽입
         if (val.length === 2 && !val.includes('-')) {
           val = val + '-';
         } else if (val.length > 2 && val.charAt(2) !== '-') {
@@ -776,15 +955,14 @@
         const rowId = this.dataset.rowId;
         const row = state.productionRows.find(r => r.id === rowId);
         if (row) {
-          row.lotNo = String(val); // 연도가 바뀌어도 과거 기록이 불변하도록 텍스트(String) 고정값 저장
+          row.lotNo = String(val);
           saveProductionData(true);
         }
-      });
+      };
     });
 
-    // 생산수량 (정수 숫자만 허용)
     tbody.querySelectorAll('.input-prod-qty').forEach(input => {
-      input.addEventListener('input', function () {
+      input.oninput = function () {
         const cleaned = this.value.replace(/[^0-9]/g, '');
         this.value = cleaned;
 
@@ -795,25 +973,17 @@
           calculateProductionTotals();
           saveProductionData(true);
         }
-      });
+      };
     });
 
-    // 작업자별 작업시간 (숫자 및 소수점 1자리까지 입력 가능, 예: 7.5, 8.0)
     tbody.querySelectorAll('.input-worker-hour').forEach(input => {
-      input.addEventListener('input', function () {
-        let val = this.value;
+      input.oninput = function () {
+        let val = this.value.replace(/[^0-9.]/g, '');
 
-        // 소수점 1자리까지 허용 정규식 필터링
-        // 숫자와 점 하나만 허용
-        val = val.replace(/[^0-9.]/g, '');
-
-        // 점(.)이 여러 개 들어간 경우 첫 번째 점만 유지
         const parts = val.split('.');
         if (parts.length > 2) {
           val = parts[0] + '.' + parts.slice(1).join('');
         }
-
-        // 소수점 이하 최대 1자리까지만 허용
         if (parts.length === 2 && parts[1].length > 1) {
           val = parts[0] + '.' + parts[1].slice(0, 1);
         }
@@ -829,27 +999,25 @@
           calculateProductionTotals();
           saveProductionData(true);
         }
-      });
+      };
     });
 
-    // 행 삭제 버튼
     tbody.querySelectorAll('.btn-delete-prod-row').forEach(btn => {
-      btn.addEventListener('click', function () {
+      btn.onclick = function () {
         const rowId = this.dataset.rowId;
         if (state.productionRows.length <= 1) {
-          // 마지막 1행은 초기화로 대응
           state.productionRows = [createDefaultProductionRow()];
         } else {
           state.productionRows = state.productionRows.filter(r => r.id !== rowId);
         }
         renderProductionTable();
         saveProductionData(true);
-      });
+      };
     });
   }
 
   // =========================================================================
-  // 8. 탭 3: [설정] 마스터 데이터 관리 로직
+  // 8. 탭 3: [설정] 마스터 데이터 관리
   // =========================================================================
   function renderMasterItems() {
     const tbody = document.getElementById('master-items-tbody');
@@ -889,9 +1057,8 @@
     const tbody = document.getElementById('master-items-tbody');
     if (!tbody) return;
 
-    // 품목 수정
     tbody.querySelectorAll('.btn-edit-item').forEach(btn => {
-      btn.addEventListener('click', function () {
+      btn.onclick = function () {
         const tr = this.closest('tr');
         const textSpan = tr.querySelector('.item-name-text');
         const input = tr.querySelector('.master-edit-input');
@@ -914,35 +1081,33 @@
             renderProductionTable();
           }
         }
-      });
+      };
     });
 
-    // 품목 인풋 엔터키 처리
     tbody.querySelectorAll('.master-edit-input').forEach(input => {
-      input.addEventListener('keydown', function (e) {
+      input.onkeydown = function (e) {
         if (e.key === 'Enter') {
           const tr = this.closest('tr');
           const editBtn = tr.querySelector('.btn-edit-item');
           if (editBtn) editBtn.click();
         }
-      });
+      };
     });
 
-    // 품목 삭제
     tbody.querySelectorAll('.btn-delete-item').forEach(btn => {
-      btn.addEventListener('click', function () {
+      btn.onclick = function () {
         const itemId = this.dataset.id;
         const item = state.items.find(i => i.id === itemId);
         if (!item) return;
 
-        if (confirm(`'${item.name}' 품목을 마스터에서 삭제하시겠습니까?\n(검정 일정 및 생산 일정의 목록에서도 제외됩니다)`)) {
+        if (confirm(`'${item.name}' 품목을 마스터에서 삭제하시겠습니까?\n(클라우드 DB에 즉시 반영됩니다)`)) {
           state.items = state.items.filter(i => i.id !== itemId);
           saveMasterData(true);
           renderMasterItems();
           renderInspectionTable();
           renderProductionTable();
         }
-      });
+      };
     });
   }
 
@@ -984,9 +1149,8 @@
     const tbody = document.getElementById('master-workers-tbody');
     if (!tbody) return;
 
-    // 작업자 수정
     tbody.querySelectorAll('.btn-edit-worker').forEach(btn => {
-      btn.addEventListener('click', function () {
+      btn.onclick = function () {
         const tr = this.closest('tr');
         const textSpan = tr.querySelector('.worker-name-text');
         const input = tr.querySelector('.master-edit-input');
@@ -1008,53 +1172,49 @@
             renderProductionTable();
           }
         }
-      });
+      };
     });
 
-    // 작업자 인풋 엔터키 처리
     tbody.querySelectorAll('.master-edit-input').forEach(input => {
-      input.addEventListener('keydown', function (e) {
+      input.onkeydown = function (e) {
         if (e.key === 'Enter') {
           const tr = this.closest('tr');
           const editBtn = tr.querySelector('.btn-edit-worker');
           if (editBtn) editBtn.click();
         }
-      });
+      };
     });
 
-    // 작업자 삭제
     tbody.querySelectorAll('.btn-delete-worker').forEach(btn => {
-      btn.addEventListener('click', function () {
+      btn.onclick = function () {
         const workerId = this.dataset.id;
         const worker = state.workers.find(w => w.id === workerId);
         if (!worker) return;
 
-        if (confirm(`'${worker.name}' 작업자를 마스터에서 삭제하시겠습니까?\n(생산 일정의 컬럼 헤더에서도 제외됩니다)`)) {
+        if (confirm(`'${worker.name}' 작업자를 마스터에서 삭제하시겠습니까?\n(클라우드 DB에 즉시 반영됩니다)`)) {
           state.workers = state.workers.filter(w => w.id !== workerId);
           saveMasterData(true);
           renderMasterWorkers();
           renderProductionTable();
         }
-      });
+      };
     });
   }
 
   // =========================================================================
-  // 9. CSV 내보내기 및 데이터 백업/복원
+  // 9. CSV 내보내기 및 백업/복원
   // =========================================================================
   function exportInspectionToCsv() {
-    let csv = '\uFEFF'; // Excel 한글 인코딩 방지를 위한 BOM
+    let csv = '\uFEFF';
     csv += `감지기 생산현황 관리 시스템 - 검정 일정\n`;
     csv += `기준일자(검정예정일):,${state.inspectionDate}\n\n`;
 
-    // 11일간 날짜 헤더 생성
     const dateHeaders = [];
     for (let i = 0; i < 11; i++) {
       const d = addDays(state.inspectionDate, i);
       dateHeaders.push(`"${d.getMonth() + 1}/${d.getDate()}(${DAYS_OF_WEEK[d.getDay()]})"`);
     }
 
-    // [1] 공정검사 섹션
     csv += `[공정검사]\n`;
     csv += `No,품명,주간물량,생산완료,잔량,${dateHeaders.join(',')}\n`;
 
@@ -1071,7 +1231,6 @@
 
     csv += `\n`;
 
-    // [2] 자동화조립 섹션
     csv += `[자동화조립]\n`;
     csv += `No,품명,주간물량,생산완료,잔량,${dateHeaders.join(',')}\n`;
 
@@ -1123,17 +1282,18 @@
 
   function exportAllDataAsJson() {
     const allData = {
-      version: '1.0',
+      version: '2.0',
       exportedAt: new Date().toISOString(),
       masterItems: state.items,
       masterWorkers: state.workers,
+      inspectionData: state.inspectionData,
+      productionRows: state.productionRows,
       localStorageDump: {}
     };
 
-    // 로컬스토리지 내 모든 PMS 데이터 덤프
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith('pms_')) {
+      if (key && (key.startsWith('pms_') || key.startsWith('demo_'))) {
         allData.localStorageDump[key] = localStorage.getItem(key);
       }
     }
@@ -1156,18 +1316,18 @@
     reader.onload = function (e) {
       try {
         const imported = JSON.parse(e.target.result);
+        if (imported.masterItems) state.items = imported.masterItems;
+        if (imported.masterWorkers) state.workers = imported.masterWorkers;
+        saveMasterData(false);
+
         if (imported.localStorageDump) {
           Object.entries(imported.localStorageDump).forEach(([key, val]) => {
             localStorage.setItem(key, val);
           });
         }
-        loadMasterData();
-        loadInspectionData(state.inspectionDate);
-        loadProductionData(state.productionDate);
-        renderMasterItems();
-        renderMasterWorkers();
-        renderInspectionTable();
-        renderProductionTable();
+        subscribeInspectionData(state.inspectionDate);
+        subscribeProductionData(state.productionDate);
+        renderAll();
         showToast('데이터 복원이 완료되었습니다');
       } catch (err) {
         alert('올바른 백업 JSON 파일이 아닙니다: ' + err.message);
@@ -1177,12 +1337,12 @@
   }
 
   // =========================================================================
-  // 10. 전역 이벤트 및 컨트롤 초기화
+  // 10. 전역 이벤트 및 컨트롤 바인딩
   // =========================================================================
   function initEventHandlers() {
     // 탭 전환 이벤트
     document.querySelectorAll('.nav-tab').forEach(tabBtn => {
-      tabBtn.addEventListener('click', function () {
+      tabBtn.onclick = function () {
         const targetTabId = this.dataset.tab;
         state.currentTab = targetTabId;
 
@@ -1197,7 +1357,6 @@
         const targetPane = document.getElementById(targetTabId);
         if (targetPane) targetPane.classList.add('active');
 
-        // 탭 이동 시 최신 마스터 동기화 렌더링
         if (targetTabId === 'tab-inspection') {
           renderInspectionTable();
         } else if (targetTabId === 'tab-production') {
@@ -1206,27 +1365,25 @@
           renderMasterItems();
           renderMasterWorkers();
         }
-      });
+      };
     });
 
     // 검정 일정 날짜 컨트롤
     const inspDateInput = document.getElementById('inspection-date');
     if (inspDateInput) {
       inspDateInput.value = state.inspectionDate;
-      inspDateInput.addEventListener('change', function () {
+      inspDateInput.onchange = function () {
         state.inspectionDate = this.value || getTodayDateString();
-        loadInspectionData(state.inspectionDate);
-        renderInspectionTable();
+        subscribeInspectionData(state.inspectionDate);
         showToast(`${state.inspectionDate} 검정일정 불러옴`);
-      });
+      };
     }
 
     document.getElementById('btn-insp-prev-day')?.addEventListener('click', () => {
       const prevDate = addDays(state.inspectionDate, -1);
       state.inspectionDate = formatDateObj(prevDate);
       if (inspDateInput) inspDateInput.value = state.inspectionDate;
-      loadInspectionData(state.inspectionDate);
-      renderInspectionTable();
+      subscribeInspectionData(state.inspectionDate);
       showToast(`${state.inspectionDate} 검정일정 불러옴`);
     });
 
@@ -1234,16 +1391,14 @@
       const nextDate = addDays(state.inspectionDate, 1);
       state.inspectionDate = formatDateObj(nextDate);
       if (inspDateInput) inspDateInput.value = state.inspectionDate;
-      loadInspectionData(state.inspectionDate);
-      renderInspectionTable();
+      subscribeInspectionData(state.inspectionDate);
       showToast(`${state.inspectionDate} 검정일정 불러옴`);
     });
 
     document.getElementById('btn-insp-today')?.addEventListener('click', () => {
       state.inspectionDate = getTodayDateString();
       if (inspDateInput) inspDateInput.value = state.inspectionDate;
-      loadInspectionData(state.inspectionDate);
-      renderInspectionTable();
+      subscribeInspectionData(state.inspectionDate);
       showToast('오늘 검정일정으로 이동');
     });
 
@@ -1259,20 +1414,18 @@
     const prodDateInput = document.getElementById('production-date');
     if (prodDateInput) {
       prodDateInput.value = state.productionDate;
-      prodDateInput.addEventListener('change', function () {
+      prodDateInput.onchange = function () {
         state.productionDate = this.value || getTodayDateString();
-        loadProductionData(state.productionDate);
-        renderProductionTable();
+        subscribeProductionData(state.productionDate);
         showToast(`${state.productionDate} 생산일정 불러옴`);
-      });
+      };
     }
 
     document.getElementById('btn-prod-prev-day')?.addEventListener('click', () => {
       const prevDate = addDays(state.productionDate, -1);
       state.productionDate = formatDateObj(prevDate);
       if (prodDateInput) prodDateInput.value = state.productionDate;
-      loadProductionData(state.productionDate);
-      renderProductionTable();
+      subscribeProductionData(state.productionDate);
       showToast(`${state.productionDate} 생산일정 불러옴`);
     });
 
@@ -1280,16 +1433,14 @@
       const nextDate = addDays(state.productionDate, 1);
       state.productionDate = formatDateObj(nextDate);
       if (prodDateInput) prodDateInput.value = state.productionDate;
-      loadProductionData(state.productionDate);
-      renderProductionTable();
+      subscribeProductionData(state.productionDate);
       showToast(`${state.productionDate} 생산일정 불러옴`);
     });
 
     document.getElementById('btn-prod-today')?.addEventListener('click', () => {
       state.productionDate = getTodayDateString();
       if (prodDateInput) prodDateInput.value = state.productionDate;
-      loadProductionData(state.productionDate);
-      renderProductionTable();
+      subscribeProductionData(state.productionDate);
       showToast('오늘 생산일정으로 이동');
     });
 
@@ -1304,7 +1455,6 @@
     // 생산 행 추가 버튼
     document.getElementById('btn-add-production-row')?.addEventListener('click', () => {
       const newRow = createDefaultProductionRow();
-      // 이전 마지막 행의 로트번호를 참조하여 자동 증가
       if (state.productionRows.length > 0) {
         const lastRow = state.productionRows[state.productionRows.length - 1];
         if (lastRow.lotNo && lastRow.lotNo.includes('-')) {
@@ -1320,12 +1470,11 @@
       renderProductionTable();
       saveProductionData(true);
 
-      // 추가된 행의 첫 번째 입력으로 포커스 이동
       const newlyAddedRowEl = document.querySelector(`tr[data-row-id="${newRow.id}"] .input-prod-lot`);
       if (newlyAddedRowEl) newlyAddedRowEl.focus();
     });
 
-    // 마스터 품목 추가 폼
+    // 마스터 품목 추가
     document.getElementById('form-add-item')?.addEventListener('submit', function (e) {
       e.preventDefault();
       const input = document.getElementById('input-new-item');
@@ -1344,7 +1493,7 @@
       renderProductionTable();
     });
 
-    // 마스터 작업자 추가 폼
+    // 마스터 작업자 추가
     document.getElementById('form-add-worker')?.addEventListener('submit', function (e) {
       e.preventDefault();
       const input = document.getElementById('input-new-worker');
@@ -1370,7 +1519,7 @@
     // JSON 복원 파일 인풋
     const importInput = document.getElementById('input-import-json');
     if (importInput) {
-      importInput.addEventListener('change', function (e) {
+      importInput.addEventListener('change', function () {
         if (this.files && this.files[0]) {
           importAllDataFromJson(this.files[0]);
           this.value = '';
@@ -1378,7 +1527,6 @@
       });
     }
 
-    // 실시간 시계 업데이트 (1초 주기)
     startClock();
   }
 
@@ -1410,28 +1558,21 @@
       .replace(/'/g, '&#039;');
   }
 
-  // =========================================================================
-  // 11. 애플리케이션 부트스트랩 (시작점)
-  // =========================================================================
-  function initApp() {
-    // 1. 마스터 데이터 로드 (없으면 기본값 생성)
-    loadMasterData();
-
-    // 2. 현재 날짜의 검정 일정 & 생산 일정 로드
-    loadInspectionData(state.inspectionDate);
-    loadProductionData(state.productionDate);
-
-    // 3. UI 렌더링
+  function renderAll() {
     renderInspectionTable();
     renderProductionTable();
     renderMasterItems();
     renderMasterWorkers();
-
-    // 4. 이벤트 핸들러 바인딩
-    initEventHandlers();
   }
 
-  // DOMContentLoaded 완료 후 실행
+  // =========================================================================
+  // 11. 부트스트랩 (시작점)
+  // =========================================================================
+  function initApp() {
+    initEventHandlers();
+    initFirebase();
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
   } else {

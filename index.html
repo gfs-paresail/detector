@@ -57,9 +57,9 @@
 
       <!-- 우측 상단 유틸리티 -->
       <div class="header-right">
-        <div class="status-indicator">
-          <span class="status-dot"></span>
-          <span class="status-text">실시간 자동저장 활성화</span>
+        <div class="status-indicator" id="db-status-badge">
+          <span class="status-dot" id="db-status-dot"></span>
+          <span class="status-text" id="db-status-text">클라우드 DB 연결 중...</span>
         </div>
         <div class="clock-display" id="clock-display">2026-10-27 12:00:00</div>
         <div class="backup-actions">
@@ -399,6 +399,9 @@
 
   </div>
 
+  <!-- Firebase App 및 Cloud Firestore SDK (Compat v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
