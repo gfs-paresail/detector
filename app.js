@@ -40,14 +40,14 @@
 
   // 기본 공통 품목 (생산현황, 생산일정 조립/검사 공통)
   const DEFAULT_COMMON_ITEMS = [
-    { id: 'item_1', name: '광전식 스포트형 감지기 (1종)' },
-    { id: 'item_2', name: '광전식 스포트형 감지기 (2종)' },
-    { id: 'item_3', name: '차동식 스포트형 감지기 (2종)' },
-    { id: 'item_4', name: '정온식 스포트형 감지기 (특종)' },
-    { id: 'item_5', name: '정온식 스포트형 감지기 (1종)' },
-    { id: 'item_6', name: '자외선/적외선 불꽃감지기' },
-    { id: 'item_7', name: '아날로그식 복합형 감지기' },
-    { id: 'item_8', name: '방폭형 열감지기' }
+    { id: 'item_1', name: '일반 차동식_방수형' },
+    { id: 'item_2', name: '일반 정온식_방수형' },
+    { id: 'item_3', name: '일반 차동식' },
+    { id: 'item_4', name: '일반 정온식' },
+    { id: 'item_5', name: '일반 광전식' },
+    { id: 'item_6', name: 'AN 정온식_방수형' },
+    { id: 'item_7', name: 'AN 정온식' },
+    { id: 'item_8', name: 'AN 광전식' }
   ];
 
   // 기본 기타 작업 품목 (생산일정 '기타' 전용)
@@ -317,10 +317,28 @@
   // =========================================================================
   // 5. 마스터 데이터 관리 (품목등록 / 기타작업 / 작업자 관리)
   // =========================================================================
+  // 과거 구버전 기본 품목인지 확인 (스포트형 감지기 더미 데이터 여부)
+  function isLegacyDefaultCommonItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return true;
+    return items.some(it => it.name && (it.name.includes('스포트형') || it.name.includes('복합형 감지기')));
+  }
+
   function loadLocalMasterData() {
     try {
       const rawCommon = localStorage.getItem(STORAGE_KEYS.COMMON_ITEMS);
-      state.commonItems = rawCommon ? JSON.parse(rawCommon) : [...DEFAULT_COMMON_ITEMS];
+      if (rawCommon) {
+        const parsed = JSON.parse(rawCommon);
+        // 저장된 데이터가 과거 구버전 기본 품목이면 최신 품목으로 자동 마이그레이션
+        if (isLegacyDefaultCommonItems(parsed)) {
+          state.commonItems = [...DEFAULT_COMMON_ITEMS];
+          saveLocalMasterData();
+        } else {
+          state.commonItems = parsed;
+        }
+      } else {
+        state.commonItems = [...DEFAULT_COMMON_ITEMS];
+        saveLocalMasterData();
+      }
 
       const rawEtc = localStorage.getItem(STORAGE_KEYS.ETC_ITEMS);
       state.etcItems = rawEtc ? JSON.parse(rawEtc) : [...DEFAULT_ETC_ITEMS];
@@ -331,6 +349,7 @@
       state.commonItems = [...DEFAULT_COMMON_ITEMS];
       state.etcItems = [...DEFAULT_ETC_ITEMS];
       state.workers = [...DEFAULT_WORKERS];
+      saveLocalMasterData();
     }
   }
 
@@ -346,7 +365,13 @@
       ]);
 
       if (commonDoc.exists && Array.isArray(commonDoc.data().items)) {
-        state.commonItems = commonDoc.data().items;
+        const dbItems = commonDoc.data().items;
+        // DB에 저장된 내용이 과거 구버전 기본 품목이면 최신 품목으로 DB 갱신
+        if (isLegacyDefaultCommonItems(dbItems)) {
+          metaRef.doc('common_items').set({ items: state.commonItems });
+        } else {
+          state.commonItems = dbItems;
+        }
       } else {
         metaRef.doc('common_items').set({ items: state.commonItems });
       }
@@ -375,7 +400,7 @@
     localStorage.setItem(STORAGE_KEYS.WORKERS, JSON.stringify(state.workers));
   }
 
-  async function saveMasterToDb() {
+  async function saveMasterToDb(silent = false) {
     saveLocalMasterData();
 
     if (isFirestoreActive && db) {
@@ -386,14 +411,14 @@
           metaRef.doc('etc_items').set({ items: state.etcItems }),
           metaRef.doc('master_workers').set({ workers: state.workers })
         ]);
-        showToast('설정이 DB에 저장되었습니다');
+        if (!silent) showToast('설정이 DB에 저장되었습니다');
         markAsDirty(false);
       } catch (err) {
         console.error('설정 DB 저장 실패:', err);
-        showToast('로컬에 임시 저장되었습니다 (DB 오류)');
+        if (!silent) showToast('로컬에 임시 저장되었습니다 (DB 오류)');
       }
     } else {
-      showToast('로컬에 저장되었습니다');
+      if (!silent) showToast('로컬에 저장되었습니다');
       markAsDirty(false);
     }
 
@@ -1406,6 +1431,7 @@
       if (newName && newName !== originalName) {
         item.name = newName;
         saveLocalMasterData();
+        saveMasterToDb(true);
         markAsDirty(true);
         showToast(`'${newName}'(으)로 수정되었습니다`);
       }
@@ -1486,6 +1512,7 @@
           targetList.splice(toIdx, 0, movedItem);
 
           saveLocalMasterData();
+          saveMasterToDb(true);
           markAsDirty(true);
 
           if (listKey === 'commonItems') {
@@ -1927,6 +1954,35 @@
         if (!state.inspectionData[section][itemId]) state.inspectionData[section][itemId] = { weekly: 0, daily: {} };
         state.inspectionData[section][itemId].weekly = numVal;
 
+        // [공정 1 -> 공정 2 주간물량 자동 동기화]
+        // 공정 1(공정검사: 'process')에 주간물량 입력 시, 동일 품명의 공정 2(자동화조립: 'assembly')에도 즉시 동일 수량 자동 반영
+        if (section === 'process') {
+          if (!state.inspectionData['assembly']) state.inspectionData['assembly'] = {};
+
+          // 현재 입력한 품목 정보 (ID 및 품명) 확인
+          const currentItem = (state.commonItems || []).find(it => String(it.id) === String(itemId));
+          const currentItemName = currentItem ? currentItem.name : null;
+
+          // 동일 itemId 또는 동일 품명을 가진 공정 2 품목 매칭
+          const matchedItems = (state.commonItems || []).filter(it =>
+            String(it.id) === String(itemId) || (currentItemName && it.name === currentItemName)
+          );
+          const targetIds = matchedItems.length > 0 ? matchedItems.map(it => it.id) : [itemId];
+
+          targetIds.forEach(tId => {
+            if (!state.inspectionData['assembly'][tId]) {
+              state.inspectionData['assembly'][tId] = { weekly: 0, daily: {} };
+            }
+            state.inspectionData['assembly'][tId].weekly = numVal;
+
+            // 공정 2 화면의 해당 입력 필드 값 즉시 동기화
+            const assemblyInput = document.querySelector(`.input-weekly-qty[data-section="assembly"][data-item-id="${tId}"]`);
+            if (assemblyInput) {
+              assemblyInput.value = target.value;
+            }
+          });
+        }
+
         saveLocalInspectionData();
         markAsDirty(true);
         updateAllInspectionCalculations();
@@ -2177,11 +2233,12 @@
         });
         input.value = '';
         saveLocalMasterData();
+        saveMasterToDb(true);
         markAsDirty(true);
         renderMasterCommonItems();
         renderInspectionTable();
         renderProductionTable();
-        showToast('품목이 추가되었습니다 (설정 저장을 눌러 DB에 반영하세요)');
+        showToast('품목이 추가되었습니다');
       });
     }
 
@@ -2199,10 +2256,11 @@
         });
         input.value = '';
         saveLocalMasterData();
+        saveMasterToDb(true);
         markAsDirty(true);
         renderMasterEtcItems();
         renderProductionTable();
-        showToast('기타작업이 추가되었습니다 (설정 저장을 눌러 DB에 반영하세요)');
+        showToast('기타작업이 추가되었습니다');
       });
     }
 
@@ -2221,10 +2279,11 @@
         });
         input.value = '';
         saveLocalMasterData();
+        saveMasterToDb(true);
         markAsDirty(true);
         renderMasterWorkers();
         renderProductionTable();
-        showToast('작업자가 추가되었습니다 (설정 저장을 눌러 DB에 반영하세요)');
+        showToast('작업자가 추가되었습니다');
       });
     }
 
@@ -2237,6 +2296,7 @@
           worker.type = newType;
           e.target.className = `worker-type-select ${newType === 'fixed' ? 'type-fixed' : 'type-variable'}`;
           saveLocalMasterData();
+          saveMasterToDb(true);
           markAsDirty(true);
           renderProductionTable();
           showToast(`[${worker.name}] 작업자 상태가 '${newType === 'fixed' ? '고정' : '변동'}'으로 변경되었습니다`);
@@ -2264,6 +2324,7 @@
         if (confirm(`'${item.name}' 품목을 삭제하시겠습니까?`)) {
           state.commonItems = state.commonItems.filter(i => i.id !== id);
           saveLocalMasterData();
+          saveMasterToDb(true);
           markAsDirty(true);
           renderMasterCommonItems();
           renderInspectionTable();
@@ -2286,6 +2347,7 @@
         if (confirm(`'${item.name}' 항목을 삭제하시겠습니까?`)) {
           state.etcItems = state.etcItems.filter(i => i.id !== id);
           saveLocalMasterData();
+          saveMasterToDb(true);
           markAsDirty(true);
           renderMasterEtcItems();
           renderProductionTable();
@@ -2308,6 +2370,7 @@
           state.workers = state.workers.filter(w => w.id !== id);
           state.selectedVarWorkerIds = state.selectedVarWorkerIds.filter(wId => wId !== id);
           saveLocalMasterData();
+          saveMasterToDb(true);
           markAsDirty(true);
           renderMasterWorkers();
           renderProductionTable();
