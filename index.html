@@ -51,7 +51,7 @@
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
-          <span>설정 (마스터 관리)</span>
+          <span>설정</span>
         </button>
       </nav>
 
@@ -65,7 +65,7 @@
 
         <div class="status-indicator" id="db-status-badge">
           <span class="status-dot" id="db-status-dot"></span>
-          <span class="status-text" id="db-status-text">클라우드 DB 연결 중...</span>
+          <span class="status-text" id="db-status-text">DB 연결됨</span>
         </div>
         <div class="clock-display" id="clock-display">2026-10-27 12:00:00</div>
         <div class="backup-actions">
@@ -89,142 +89,214 @@
       <!-- 탭 1: [생산현황] (구 검정 일정) -->
       <!-- ============================================ -->
       <section id="tab-inspection" class="tab-pane active" role="tabpanel">
-        <div class="panel-header-card">
-          <div class="panel-toolbar">
-            <div class="toolbar-group">
-              <label for="inspection-date" class="toolbar-label">
-                <span class="label-badge">생산 시작일</span>
-              </label>
-              
-              <!-- 날짜 선택기 & 캘린더 색상 인디케이터 -->
-              <div class="date-picker-wrap highlight-start-date">
-                <button type="button" class="btn-date-nav" id="btn-insp-prev-day" title="이전 날짜">◀</button>
-                <input type="date" id="inspection-date" class="input-date font-bold text-primary">
-                <button type="button" class="btn-date-nav" id="btn-insp-next-day" title="다음 날짜">▶</button>
-              </div>
-              <button type="button" class="btn btn-sm btn-outline" id="btn-insp-today">오늘</button>
-              
-              <!-- 날짜 인디케이터 배지 -->
-              <span class="date-range-badge" id="insp-date-range-badge">11일간 일정</span>
-              <span class="date-status-pill" id="insp-date-status-pill"></span>
-            </div>
-
-            <div class="toolbar-group">
-              <button type="button" class="btn btn-sm btn-outline" id="btn-export-inspection-csv">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                CSV 내보내기
-              </button>
-              <button type="button" class="btn btn-sm btn-ghost text-danger" id="btn-insp-clear-day" title="현재 날짜 생산현황 데이터 초기화">
-                초기화
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 생산현황 2단 분할 테이블 (공정검사 / 자동화조립) -->
-        <div class="inspection-split-container">
+        <div class="inspection-layout-wrap">
           
-          <!-- [표 1] 공정검사 -->
-          <div class="table-section-card">
-            <div class="table-section-header header-process">
-              <div class="section-title-wrap">
-                <span class="section-indicator bar-process"></span>
-                <span class="section-badge badge-process">공정 1</span>
-                <h3 class="section-title">공정검사</h3>
-                <span class="section-desc">품질 검사 및 일자별 생산 현황</span>
+          <!-- 좌측 사이드바: 저장된 검정일정 목록 및 연도/월 필터 -->
+          <aside class="inspection-sidebar" id="inspection-sidebar">
+            <div class="sidebar-header">
+              <div class="sidebar-title-row">
+                <span class="sidebar-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  저장된 검정일정
+                </span>
+                <span class="sidebar-count-badge" id="insp-schedule-count">0개</span>
               </div>
-              <div class="section-summary-pills">
-                <span class="summary-pill">주간: <strong id="pill-insp-process-weekly"></strong></span>
-                <span class="summary-pill pill-primary">완료: <strong id="pill-insp-process-completed"></strong></span>
-                <span class="summary-pill pill-balance-red">잔량: <strong id="pill-insp-process-balance"></strong></span>
+              <div class="sidebar-filter-row">
+                <select id="filter-insp-year" class="sidebar-filter-select" title="연도 선택">
+                  <option value="ALL">전체 연도</option>
+                </select>
+                <select id="filter-insp-month" class="sidebar-filter-select" title="월 선택">
+                  <option value="ALL">전체</option>
+                  <option value="1">1월</option>
+                  <option value="2">2월</option>
+                  <option value="3">3월</option>
+                  <option value="4">4월</option>
+                  <option value="5">5월</option>
+                  <option value="6">6월</option>
+                  <option value="7">7월</option>
+                  <option value="8">8월</option>
+                  <option value="9">9월</option>
+                  <option value="10">10월</option>
+                  <option value="11">11월</option>
+                  <option value="12">12월</option>
+                </select>
               </div>
             </div>
 
-            <div class="table-container">
-              <table class="grid-table inspection-table" id="inspection-process-table">
-                <thead>
-                  <tr class="header-row-primary">
-                    <th class="col-fixed col-no" rowspan="2">No</th>
-                    <th class="col-fixed col-item" rowspan="2">품명</th>
-                    <th class="col-fixed col-weekly" rowspan="2">주간물량</th>
-                    <th class="col-fixed col-completed" rowspan="2">생산완료</th>
-                    <th class="col-fixed col-balance-th" rowspan="2">잔량</th>
-                    <th class="col-group-header" colspan="11">작업일자별 생산현황 [공정검사]</th>
-                  </tr>
-                  <tr class="header-row-dates" id="inspection-process-date-headers">
-                    <!-- 11일간의 날짜 헤더 동적 생성 (토: 파랑, 일: 빨강) -->
-                  </tr>
-                </thead>
-                <tbody id="inspection-process-tbody">
-                  <!-- 품목 행들 -->
-                </tbody>
-                <tfoot>
-                  <tr class="summary-row" id="inspection-process-tfoot">
-                    <td class="col-no summary-label">합계</td>
-                    <td class="col-item summary-empty"></td>
-                    <td class="col-weekly num-cell font-bold" id="sum-insp-process-weekly"></td>
-                    <td class="col-completed num-cell text-primary font-bold" id="sum-insp-process-completed"></td>
-                    <td class="col-balance num-cell text-danger font-bold" id="sum-insp-process-balance"></td>
-                    <!-- 11일간 일자별 합계 셀 동적 렌더링 (1:1 정확히 일치) -->
-                  </tr>
-                </tfoot>
-              </table>
+            <!-- 일정 버튼 목록 (최근 일자 상단, 세로 스크롤) -->
+            <div class="inspection-schedule-list" id="inspection-schedule-list">
+              <div class="schedule-empty-msg">저장된 일정이 없습니다.<br>[일정저장]을 눌러보세요.</div>
+            </div>
+          </aside>
+
+          <!-- 우측 메인 영역: 툴바 + 2단 분할 테이블 -->
+          <div class="inspection-main-area">
+            <div class="panel-header-card">
+              <div class="panel-toolbar">
+                <div class="toolbar-group">
+                  <label for="inspection-date" class="toolbar-label">
+                    <span class="label-badge">생산 시작일</span>
+                  </label>
+                  <div class="date-picker-wrap highlight-start-date">
+                    <button type="button" class="btn-date-nav" id="btn-insp-prev-day" title="이전 날짜">◀</button>
+                    <input type="date" id="inspection-date" class="input-date font-bold text-primary">
+                    <button type="button" class="btn-date-nav" id="btn-insp-next-day" title="다음 날짜">▶</button>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-outline" id="btn-insp-today">오늘</button>
+
+                  <!-- 1. 검정예정일 날짜 선택기 추가 -->
+                  <label for="inspection-target-date" class="toolbar-label" style="margin-left: 8px;">
+                    <span class="label-badge" style="background-color: #059669;">검정예정일</span>
+                  </label>
+                  <div class="date-picker-wrap" style="border: 2px solid #059669;">
+                    <button type="button" class="btn-date-nav" id="btn-insp-prev-target" title="이전 날짜">◀</button>
+                    <input type="date" id="inspection-target-date" class="input-date font-bold" style="color: #059669;">
+                    <button type="button" class="btn-date-nav" id="btn-insp-next-target" title="다음 날짜">▶</button>
+                  </div>
+
+                  <!-- 2. 일정저장 버튼 추가 -->
+                  <button type="button" class="btn btn-sm btn-save-primary" id="btn-insp-save" title="현재 일정 및 데이터를 검정예정일 명칭으로 DB에 저장">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    일정저장
+                  </button>
+
+                  <!-- 날짜 인디케이터 배지 -->
+                  <span class="date-range-badge" id="insp-date-range-badge">10일간 일정</span>
+                  <span class="date-status-pill" id="insp-date-status-pill"></span>
+                </div>
+
+                <div class="toolbar-group">
+                  <button type="button" class="btn btn-sm btn-outline" id="btn-export-inspection-csv">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    CSV 내보내기
+                  </button>
+                  <button type="button" class="btn btn-sm btn-ghost text-danger" id="btn-insp-clear-day" title="현재 날짜 생산현황 데이터 초기화">
+                    초기화
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 생산현황 2단 분할 테이블 (공정검사 / 자동화조립) -->
+            <div class="inspection-split-container">
+              
+              <!-- [표 1] 공정검사 -->
+              <div class="table-section-card">
+                <div class="table-section-header header-process">
+                  <div class="section-title-wrap">
+                    <span class="section-indicator bar-process"></span>
+                    <span class="section-badge badge-process">공정 1</span>
+                    <h3 class="section-title">공정검사</h3>
+                    <span class="section-desc">품질 검사 및 일자별 생산 현황</span>
+                  </div>
+                  <div class="section-summary-pills">
+                    <span class="summary-pill">주간: <strong id="pill-insp-process-weekly"></strong></span>
+                    <span class="summary-pill pill-primary">완료: <strong id="pill-insp-process-completed"></strong></span>
+                    <span class="summary-pill pill-balance-red">잔량: <strong id="pill-insp-process-balance"></strong></span>
+                  </div>
+                </div>
+
+                <div class="table-container">
+                  <table class="grid-table inspection-table" id="inspection-process-table">
+                    <thead>
+                      <tr class="header-row-primary">
+                        <th class="col-fixed-no" rowspan="2">No</th>
+                        <th class="col-fixed-item" rowspan="2">품명</th>
+                        <th class="col-fixed-weekly" rowspan="2">주간물량</th>
+                        <th class="col-fixed-completed" rowspan="2">생산완료</th>
+                        <th class="col-fixed-balance col-balance-th" rowspan="2">잔량</th>
+                        <th class="col-group-header" id="th-insp-process-group" colspan="10">작업일자별 생산현황 [공정검사]</th>
+                        <th class="th-add-date" rowspan="2" title="일정 추가 / 삭제">
+                          <div class="date-col-actions">
+                            <button type="button" class="btn-add-date-col btn-add-day-trigger" title="일정 1일 추가">+</button>
+                            <button type="button" class="btn-sub-date-col btn-remove-day-trigger" title="추가된 일정 1일 삭제" style="display:none;">-</button>
+                          </div>
+                        </th>
+                      </tr>
+                      <tr class="header-row-dates" id="inspection-process-date-headers">
+                        <!-- 날짜 헤더 동적 생성 (기본 10일) -->
+                      </tr>
+                    </thead>
+                    <tbody id="inspection-process-tbody">
+                      <!-- 품목 행들 -->
+                    </tbody>
+                    <tfoot>
+                      <tr class="summary-row" id="inspection-process-tfoot">
+                        <td class="col-fixed-no summary-label">합계</td>
+                        <td class="col-fixed-item summary-empty"></td>
+                        <td class="col-fixed-weekly num-cell font-bold" id="sum-insp-process-weekly"></td>
+                        <td class="col-fixed-completed num-cell text-primary font-bold" id="sum-insp-process-completed"></td>
+                        <td class="col-fixed-balance num-cell text-danger font-bold" id="sum-insp-process-balance"></td>
+                        <!-- 일자별 합계 셀 동적 렌더링 -->
+                        <td class="summary-empty"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <!-- [표 2] 자동화조립 -->
+              <div class="table-section-card">
+                <div class="table-section-header header-assembly">
+                  <div class="section-title-wrap">
+                    <span class="section-indicator bar-assembly"></span>
+                    <span class="section-badge badge-assembly">공정 2</span>
+                    <h3 class="section-title">자동화조립</h3>
+                    <span class="section-desc">자동화 라인 조립 및 일자별 생산 현황</span>
+                  </div>
+                  <div class="section-summary-pills">
+                    <span class="summary-pill">주간: <strong id="pill-insp-assembly-weekly"></strong></span>
+                    <span class="summary-pill pill-primary">완료: <strong id="pill-insp-assembly-completed"></strong></span>
+                    <span class="summary-pill pill-balance-red">잔량: <strong id="pill-insp-assembly-balance"></strong></span>
+                  </div>
+                </div>
+
+                <div class="table-container">
+                  <table class="grid-table inspection-table" id="inspection-assembly-table">
+                    <thead>
+                      <tr class="header-row-primary">
+                        <th class="col-fixed-no" rowspan="2">No</th>
+                        <th class="col-fixed-item" rowspan="2">품명</th>
+                        <th class="col-fixed-weekly" rowspan="2">주간물량</th>
+                        <th class="col-fixed-completed" rowspan="2">생산완료</th>
+                        <th class="col-fixed-balance col-balance-th" rowspan="2">잔량</th>
+                        <th class="col-group-header header-assembly-group" id="th-insp-assembly-group" colspan="10">작업일자별 생산현황 [자동화조립]</th>
+                        <th class="th-add-date" rowspan="2" title="일정 추가 / 삭제">
+                          <div class="date-col-actions">
+                            <button type="button" class="btn-add-date-col btn-add-day-trigger" title="일정 1일 추가">+</button>
+                            <button type="button" class="btn-sub-date-col btn-remove-day-trigger" title="추가된 일정 1일 삭제" style="display:none;">-</button>
+                          </div>
+                        </th>
+                      </tr>
+                      <tr class="header-row-dates" id="inspection-assembly-date-headers">
+                        <!-- 날짜 헤더 동적 생성 (기본 10일) -->
+                      </tr>
+                    </thead>
+                    <tbody id="inspection-assembly-tbody">
+                      <!-- 품목 행들 -->
+                    </tbody>
+                    <tfoot>
+                      <tr class="summary-row" id="inspection-assembly-tfoot">
+                        <td class="col-fixed-no summary-label">합계</td>
+                        <td class="col-fixed-item summary-empty"></td>
+                        <td class="col-fixed-weekly num-cell font-bold" id="sum-insp-assembly-weekly"></td>
+                        <td class="col-fixed-completed num-cell text-primary font-bold" id="sum-insp-assembly-completed"></td>
+                        <td class="col-fixed-balance num-cell text-danger font-bold" id="sum-insp-assembly-balance"></td>
+                        <!-- 일자별 합계 셀 동적 렌더링 -->
+                        <td class="summary-empty"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
             </div>
           </div>
-
-          <!-- [표 2] 자동화조립 -->
-          <div class="table-section-card">
-            <div class="table-section-header header-assembly">
-              <div class="section-title-wrap">
-                <span class="section-indicator bar-assembly"></span>
-                <span class="section-badge badge-assembly">공정 2</span>
-                <h3 class="section-title">자동화조립</h3>
-                <span class="section-desc">자동화 라인 조립 및 일자별 생산 현황</span>
-              </div>
-              <div class="section-summary-pills">
-                <span class="summary-pill">주간: <strong id="pill-insp-assembly-weekly"></strong></span>
-                <span class="summary-pill pill-primary">완료: <strong id="pill-insp-assembly-completed"></strong></span>
-                <span class="summary-pill pill-balance-red">잔량: <strong id="pill-insp-assembly-balance"></strong></span>
-              </div>
-            </div>
-
-            <div class="table-container">
-              <table class="grid-table inspection-table" id="inspection-assembly-table">
-                <thead>
-                  <tr class="header-row-primary">
-                    <th class="col-fixed col-no" rowspan="2">No</th>
-                    <th class="col-fixed col-item" rowspan="2">품명</th>
-                    <th class="col-fixed col-weekly" rowspan="2">주간물량</th>
-                    <th class="col-fixed col-completed" rowspan="2">생산완료</th>
-                    <th class="col-fixed col-balance-th" rowspan="2">잔량</th>
-                    <th class="col-group-header header-assembly-group" colspan="11">작업일자별 생산현황 [자동화조립]</th>
-                  </tr>
-                  <tr class="header-row-dates" id="inspection-assembly-date-headers">
-                    <!-- 11일간의 날짜 헤더 동적 생성 -->
-                  </tr>
-                </thead>
-                <tbody id="inspection-assembly-tbody">
-                  <!-- 품목 행들 -->
-                </tbody>
-                <tfoot>
-                  <tr class="summary-row" id="inspection-assembly-tfoot">
-                    <td class="col-no summary-label">합계</td>
-                    <td class="col-item summary-empty"></td>
-                    <td class="col-weekly num-cell font-bold" id="sum-insp-assembly-weekly"></td>
-                    <td class="col-completed num-cell text-primary font-bold" id="sum-insp-assembly-completed"></td>
-                    <td class="col-balance num-cell text-danger font-bold" id="sum-insp-assembly-balance"></td>
-                    <!-- 11일간 일자별 합계 셀 동적 렌더링 (1:1 정확히 일치) -->
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
         </div>
       </section>
 
       <!-- ============================================ -->
-      <!-- 탭 2: [생산 일정] -->
+      <!-- 탭 2: [생산 일정] (3개 표: 조립 / 검사 / 기타) -->
       <!-- ============================================ -->
       <section id="tab-production" class="tab-pane" role="tabpanel">
         <div class="panel-header-card">
@@ -240,13 +312,25 @@
               </div>
               <button type="button" class="btn btn-sm btn-outline" id="btn-prod-today">오늘</button>
               <span class="date-status-pill" id="prod-date-status-pill"></span>
+
+              <!-- 생산 일정 저장 버튼 -->
+              <button type="button" class="btn btn-sm btn-save-primary" id="btn-prod-save" title="현재 일자의 생산 일정 데이터를 DB에 저장">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                일정저장
+              </button>
+
+              <!-- 변동 작업자 투입 드롭다운 (일정 저장 바로 옆) -->
+              <div class="toolbar-variable-workers-wrap">
+                <select id="select-add-var-worker" class="sidebar-filter-select" style="width: 145px; height: 28px;" title="변동 작업자 투입 선택">
+                  <option value="">+ 변동 작업자 투입...</option>
+                </select>
+                <div id="variable-workers-chip-container" class="variable-worker-chips">
+                  <!-- 선택된 변동 작업자 칩이 동적으로 렌더링됨 -->
+                </div>
+              </div>
             </div>
 
             <div class="toolbar-group">
-              <button type="button" class="btn btn-sm btn-primary" id="btn-add-production-row">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                생산 행 추가
-              </button>
               <button type="button" class="btn btn-sm btn-outline" id="btn-export-production-csv">
                 <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                 CSV 내보내기
@@ -258,65 +342,175 @@
           </div>
         </div>
 
-        <!-- 생산 일정 데이터 그리드 -->
-        <div class="table-container wide-scroll-area">
-          <table class="grid-table production-table" id="production-table">
-            <thead>
-              <tr class="header-row-primary">
-                <th class="col-fixed col-no" rowspan="2">No</th>
-                <th class="col-fixed col-item-prod" rowspan="2">품명</th>
-                <th class="col-fixed col-note" rowspan="2">비고</th>
-                <th class="col-fixed col-lot" rowspan="2">로트번호</th>
-                <th class="col-fixed col-qty" rowspan="2">생산수량</th>
-                <th class="col-group-header" id="th-workers-group-header" colspan="5">작업자별 작업시간</th>
-                <th class="col-fixed col-action" rowspan="2">관리</th>
-              </tr>
-              <tr class="header-row-workers" id="production-worker-headers">
-                <!-- 등록된 작업자 이름 동적 렌더링 -->
-              </tr>
-            </thead>
-            <tbody id="production-tbody">
-              <!-- 생산 일정 행들이 렌더링됨 -->
-            </tbody>
-            <tfoot>
-              <tr class="summary-row" id="production-tfoot">
-                <td class="col-no summary-label">합계</td>
-                <td class="col-item-prod summary-empty"></td>
-                <td class="col-note summary-empty"></td>
-                <td class="col-lot summary-empty"></td>
-                <td class="col-qty num-cell text-primary font-bold" id="sum-prod-qty"></td>
-                <!-- 각 작업자별 총 작업시간 합계 셀들이 동적으로 렌더링됨 -->
-                <td class="col-action summary-empty"></td>
-              </tr>
-            </tfoot>
-          </table>
+        <!-- 생산 일정 3개 분할 테이블 그리드 (조립 / 검사 / 기타) -->
+        <div class="production-split-container">
+
+          <!-- 1. [조립] 테이블 -->
+          <div class="table-section-card">
+            <div class="table-section-header header-prod-assembly">
+              <div class="section-title-wrap">
+                <span class="section-indicator bar-process"></span>
+                <span class="section-badge badge-process">공정 1</span>
+                <h3 class="section-title">조립</h3>
+                <span class="section-desc">조립 공정 일자별 생산 및 작업자 시간</span>
+              </div>
+              <div class="section-summary-pills">
+                <span class="summary-pill pill-primary">생산수량: <strong id="sum-prod-assembly-qty-pill">0</strong></span>
+                <span class="summary-pill">총 공수: <strong id="sum-prod-assembly-hours-pill">0.0h</strong></span>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="grid-table production-table" id="prod-table-assembly">
+                <thead>
+                  <tr class="header-row-primary">
+                    <th class="col-fixed col-no" rowspan="2">No</th>
+                    <th class="col-fixed col-item-prod" rowspan="2">품명</th>
+                    <th class="col-fixed col-note" rowspan="2">비고</th>
+                    <th class="col-fixed col-lot" rowspan="2">로트번호</th>
+                    <th class="col-fixed col-qty" rowspan="2">생산수량</th>
+                    <th class="col-group-header" id="th-workers-assembly" colspan="1">작업자별 작업시간</th>
+                  </tr>
+                  <tr class="header-row-workers" id="prod-worker-headers-assembly">
+                    <!-- 작업자 헤더 동적 렌더링 -->
+                  </tr>
+                </thead>
+                <tbody id="prod-tbody-assembly">
+                  <!-- 품목등록 마스터 기준 고정 행 렌더링 -->
+                </tbody>
+                <tfoot>
+                  <tr class="summary-row" id="prod-tfoot-assembly">
+                    <td class="col-no summary-label">합계</td>
+                    <td class="col-item-prod summary-empty"></td>
+                    <td class="col-note summary-empty"></td>
+                    <td class="col-lot summary-empty"></td>
+                    <td class="col-qty num-cell text-primary font-bold" id="sum-prod-assembly-qty"></td>
+                    <!-- 작업자별 합계 셀 동적 렌더링 -->
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- 2. [검사] 테이블 -->
+          <div class="table-section-card">
+            <div class="table-section-header header-prod-inspection">
+              <div class="section-title-wrap">
+                <span class="section-indicator bar-assembly"></span>
+                <span class="section-badge badge-assembly">공정 2</span>
+                <h3 class="section-title">검사</h3>
+                <span class="section-desc">검사 공정 일자별 생산 및 작업자 시간</span>
+              </div>
+              <div class="section-summary-pills">
+                <span class="summary-pill pill-primary">생산수량: <strong id="sum-prod-inspection-qty-pill">0</strong></span>
+                <span class="summary-pill">총 공수: <strong id="sum-prod-inspection-hours-pill">0.0h</strong></span>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="grid-table production-table" id="prod-table-inspection">
+                <thead>
+                  <tr class="header-row-primary">
+                    <th class="col-fixed col-no" rowspan="2">No</th>
+                    <th class="col-fixed col-item-prod" rowspan="2">품명</th>
+                    <th class="col-fixed col-note" rowspan="2">비고</th>
+                    <th class="col-fixed col-lot" rowspan="2">로트번호</th>
+                    <th class="col-fixed col-qty" rowspan="2">생산수량</th>
+                    <th class="col-group-header header-assembly-group" id="th-workers-inspection" colspan="1">작업자별 작업시간</th>
+                  </tr>
+                  <tr class="header-row-workers" id="prod-worker-headers-inspection">
+                    <!-- 작업자 헤더 동적 렌더링 -->
+                  </tr>
+                </thead>
+                <tbody id="prod-tbody-inspection">
+                  <!-- 품목등록 마스터 기준 고정 행 렌더링 -->
+                </tbody>
+                <tfoot>
+                  <tr class="summary-row" id="prod-tfoot-inspection">
+                    <td class="col-no summary-label">합계</td>
+                    <td class="col-item-prod summary-empty"></td>
+                    <td class="col-note summary-empty"></td>
+                    <td class="col-lot summary-empty"></td>
+                    <td class="col-qty num-cell text-primary font-bold" id="sum-prod-inspection-qty"></td>
+                    <!-- 작업자별 합계 셀 동적 렌더링 -->
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- 3. [기타] 테이블 -->
+          <div class="table-section-card">
+            <div class="table-section-header header-prod-etc">
+              <div class="section-title-wrap">
+                <span class="section-indicator bar-prod-etc"></span>
+                <span class="section-badge badge-prod-etc">공정 3</span>
+                <h3 class="section-title">기타</h3>
+                <span class="section-desc">기타작업 등록 품목 및 일자별 작업시간</span>
+              </div>
+              <div class="section-summary-pills">
+                <span class="summary-pill pill-primary">생산수량: <strong id="sum-prod-etc-qty-pill">0</strong></span>
+                <span class="summary-pill">총 공수: <strong id="sum-prod-etc-hours-pill">0.0h</strong></span>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="grid-table production-table" id="prod-table-etc">
+                <thead>
+                  <tr class="header-row-primary">
+                    <th class="col-fixed col-no" rowspan="2">No</th>
+                    <th class="col-fixed col-item-prod" rowspan="2">품명</th>
+                    <th class="col-fixed col-note" rowspan="2">비고</th>
+                    <th class="col-fixed col-lot" rowspan="2">로트번호</th>
+                    <th class="col-fixed col-qty" rowspan="2">생산수량</th>
+                    <th class="col-group-header" id="th-workers-etc" colspan="1">작업자별 작업시간</th>
+                  </tr>
+                  <tr class="header-row-workers" id="prod-worker-headers-etc">
+                    <!-- 작업자 헤더 동적 렌더링 -->
+                  </tr>
+                </thead>
+                <tbody id="prod-tbody-etc">
+                  <!-- 기타작업 등록 마스터 기준 고정 행 렌더링 -->
+                </tbody>
+                <tfoot>
+                  <tr class="summary-row" id="prod-tfoot-etc">
+                    <td class="col-no summary-label">합계</td>
+                    <td class="col-item-prod summary-empty"></td>
+                    <td class="col-note summary-empty"></td>
+                    <td class="col-lot summary-empty"></td>
+                    <td class="col-qty num-cell text-primary font-bold" id="sum-prod-etc-qty"></td>
+                    <!-- 작업자별 합계 셀 동적 렌더링 -->
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
         </div>
       </section>
 
       <!-- ============================================ -->
-      <!-- 탭 3: [설정] (마스터 데이터 관리) -->
+      <!-- 탭 3: [설정] (품목등록 / 기타작업 등록 / 작업자 관리) -->
       <!-- ============================================ -->
       <section id="tab-settings" class="tab-pane" role="tabpanel">
         
-        <!-- 품명 관리 분리 (생산현황 품목 / 생산일정 품목) + 동기화 버튼 -->
+        <!-- 상단 마스터 저장 툴바 -->
         <div class="settings-items-sync-bar">
           <div class="sync-desc-wrap">
-            <span class="sync-title font-bold text-slate-800">품명 관리 체계 분리</span>
-            <span class="sync-sub text-slate-500">생산현황 품목과 생산일정 품목을 별도로 관리하거나 원클릭으로 동기화할 수 있습니다.</span>
+            <span class="sync-title font-bold text-slate-800">마스터 데이터 관리</span>
+            <span class="sync-sub text-slate-500">등록된 항목을 <strong>드래그 & 드롭</strong>하여 순서를 변경할 수 있습니다. 변경 후 [설정 저장]을 누르면 DB에 영구 반영됩니다.</span>
           </div>
           <div class="sync-btn-group">
-            <button type="button" class="btn btn-sm btn-outline" id="btn-sync-insp-to-prod" title="생산현황 품목을 생산일정 품목으로 복사">
-              생산현황 ➔ 생산일정 동기화
-            </button>
-            <button type="button" class="btn btn-sm btn-outline" id="btn-sync-prod-to-insp" title="생산일정 품목을 생산현황 품목으로 복사">
-              생산일정 ➔ 생산현황 동기화
+            <button type="button" class="btn btn-sm btn-save-success" id="btn-save-master" title="변경된 품목 순서 및 작업자 설정을 DB에 영구 저장">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              설정 저장
             </button>
           </div>
         </div>
 
         <div class="settings-grid-3col">
           
-          <!-- 1. 생산현황 품목 관리 -->
+          <!-- 1. 품목등록 (생산현황, 생산일정 조립/검사 공통) -->
           <div class="settings-card">
             <div class="settings-card-header">
               <div class="card-title-wrap">
@@ -324,16 +518,16 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                 </div>
                 <div>
-                  <h3 class="card-title">생산현황 품목</h3>
-                  <p class="card-subtitle">[생산현황] 탭에 상시 노출되는 품목 목록입니다.</p>
+                  <h3 class="card-title">품목등록</h3>
+                  <p class="card-subtitle">[생산현황] 및 [생산일정 - 조립, 검사] 공통 품목</p>
                 </div>
               </div>
-              <span class="count-badge" id="count-insp-items-badge">0개</span>
+              <span class="count-badge" id="count-common-items-badge">0개</span>
             </div>
 
             <div class="settings-card-body">
-              <form id="form-add-insp-item" class="inline-add-form">
-                <input type="text" id="input-new-insp-item" class="form-input" placeholder="새 품명 입력 (예: 차동식 2종)" required>
+              <form id="form-add-common-item" class="inline-add-form">
+                <input type="text" id="input-new-common-item" class="form-input" placeholder="새 공통 품명 입력" required>
                 <button type="submit" class="btn btn-primary">추가</button>
               </form>
 
@@ -341,54 +535,54 @@
                 <table class="master-table">
                   <thead>
                     <tr>
-                      <th style="width: 44px;">No</th>
+                      <th style="width: 44px;">순서</th>
                       <th>품명</th>
-                      <th style="width: 110px; text-align: center;">관리</th>
+                      <th style="width: 125px; text-align: center;">관리</th>
                     </tr>
                   </thead>
-                  <tbody id="master-insp-items-tbody"></tbody>
+                  <tbody id="master-common-items-tbody"></tbody>
                 </table>
               </div>
             </div>
           </div>
 
-          <!-- 2. 생산일정 품목 관리 -->
+          <!-- 2. 기타작업 등록 (생산일정 '기타' 표 전용) -->
           <div class="settings-card">
             <div class="settings-card-header">
               <div class="card-title-wrap">
-                <div class="card-icon-box purple">
+                <div class="card-icon-box purple" style="background-color: #ffedd5; color: #ea580c;">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
                 </div>
                 <div>
-                  <h3 class="card-title">생산일정 품목</h3>
-                  <p class="card-subtitle">[생산 일정] 탭의 선택 드롭다운에 노출되는 품목입니다.</p>
+                  <h3 class="card-title">기타작업 등록</h3>
+                  <p class="card-subtitle">[생산일정 - 기타] 표에서만 전용으로 노출됩니다.</p>
                 </div>
               </div>
-              <span class="count-badge" id="count-prod-items-badge">0개</span>
+              <span class="count-badge" id="count-etc-items-badge">0개</span>
             </div>
 
             <div class="settings-card-body">
-              <form id="form-add-prod-item" class="inline-add-form">
-                <input type="text" id="input-new-prod-item" class="form-input" placeholder="새 품명 입력" required>
-                <button type="submit" class="btn btn-purple">추가</button>
+              <form id="form-add-etc-item" class="inline-add-form">
+                <input type="text" id="input-new-etc-item" class="form-input" placeholder="새 기타작업 명칭 입력" required>
+                <button type="submit" class="btn" style="background-color: #ea580c; color: white;">추가</button>
               </form>
 
               <div class="master-list-container">
                 <table class="master-table">
                   <thead>
                     <tr>
-                      <th style="width: 44px;">No</th>
-                      <th>품명</th>
-                      <th style="width: 110px; text-align: center;">관리</th>
+                      <th style="width: 44px;">순서</th>
+                      <th>기타 작업명</th>
+                      <th style="width: 125px; text-align: center;">관리</th>
                     </tr>
                   </thead>
-                  <tbody id="master-prod-items-tbody"></tbody>
+                  <tbody id="master-etc-items-tbody"></tbody>
                 </table>
               </div>
             </div>
           </div>
 
-          <!-- 3. 작업자 마스터 관리 -->
+          <!-- 3. 작업자 관리 (고정 / 변동 선택 드롭다운) -->
           <div class="settings-card">
             <div class="settings-card-header">
               <div class="card-title-wrap">
@@ -397,7 +591,7 @@
                 </div>
                 <div>
                   <h3 class="card-title">작업자 관리</h3>
-                  <p class="card-subtitle">[생산 일정]의 작업시간 컬럼 헤더로 고정 노출됩니다.</p>
+                  <p class="card-subtitle">고정: 생산일정 상시 노출 / 변동: 선택 시 노출</p>
                 </div>
               </div>
               <span class="count-badge" id="count-workers-badge">0명</span>
@@ -413,9 +607,10 @@
                 <table class="master-table">
                   <thead>
                     <tr>
-                      <th style="width: 44px;">No</th>
-                      <th>작업자 성명</th>
-                      <th style="width: 110px; text-align: center;">관리</th>
+                      <th style="width: 44px;">순서</th>
+                      <th>성명</th>
+                      <th style="width: 80px; text-align: center;">구분</th>
+                      <th style="width: 125px; text-align: center;">관리</th>
                     </tr>
                   </thead>
                   <tbody id="master-workers-tbody"></tbody>
@@ -428,13 +623,13 @@
 
         <div class="guide-banner">
           <div class="guide-item">
-            <strong>⌨️ 스프레드시트 탐색:</strong> `Tab` 키로 우측 셀, `Enter` 키로 아래 행 셀로 자유롭게 이동하며 고속 타이핑할 수 있습니다.
+            <strong>🖱️ 드래그 & 드롭 순서 변경:</strong> 항목 좌측의 번호/아이콘을 마우스로 잡고 끌어서 위/아래 순서를 자유롭게 조정할 수 있습니다.
           </div>
           <div class="guide-item">
-            <strong>🔢 스마트 로트번호:</strong> 생산 행 추가 후 `1`만 치면 자동으로 `26-001` 형태로 마스킹 변환됩니다.
+            <strong>👥 고정 vs 변동 작업자:</strong> "고정"으로 설정된 작업자는 생산일정 3개 표에 항상 컬럼으로 나타나며, "변동" 작업자는 원하는 날짜에만 투입할 수 있습니다.
           </div>
           <div class="guide-item">
-            <strong>🔴 잔량 적색 강조:</strong> 잔량 수량은 적색(Red)으로 선명하게 강조되며, 빈칸 값은 0 대신 깔끔한 공백으로 표시됩니다.
+            <strong>💾 수동 저장 필수:</strong> 무료 DB 플랜 보호를 위해 입력된 내용은 로컬에 자동 보관되며, [일정저장]/[설정 저장] 버튼을 누를 때 DB에 저장됩니다.
           </div>
         </div>
       </section>
